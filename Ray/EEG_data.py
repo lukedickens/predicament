@@ -9,7 +9,7 @@ import os
 from typing import Dict
 import mne
 
-from Ray.basic_info import data_folder, VG_file_paths, VG_Hz, EEG_buffer
+from predicament.config.basic_info import data_folder, VG_file_paths, VG_Hz, EEG_buffer
 from Ray.Event_details import Event_time_details
 
 EEG_channels = {1:"Fpz-O1", 2:"Fpz-O2", 3:"Fpz-F7", 4:"F8-F7", 5:"F7-01", 6:"F8-O2", 7:"Fpz-F8"}

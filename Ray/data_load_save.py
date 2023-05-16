@@ -9,8 +9,8 @@ import os
 import pandas as pd
 import random
 
-from Ray.basic_info import data_folder, motor_movement_data_folder, EEG_buffer, VG_Hz
-from Ray.basic_fun import unix2local
+from predicament.config.basic_info import data_folder, motor_movement_data_folder, EEG_buffer, VG_Hz
+from predicament.utils.file_utils import unix2local
 from Ray.Event_details import Event_time_details
 from Ray import EEG_data, E4_data
 

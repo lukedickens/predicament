@@ -9,7 +9,7 @@ import os
 from typing import Dict
 import pandas as pd
 
-from Ray.basic_info import data_folder, E4_file_paths, E4_buffer
+from predicament.config.basic_info import data_folder, E4_file_paths, E4_buffer
 from Ray.Event_details import Event_time_details
 
 E4_file_names = ['ACC', 'BVP', 'EDA', 'HR', 'IBI', 'TEMP'] # physiological data, tags.csv not included

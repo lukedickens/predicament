@@ -12,8 +12,8 @@ from matplotlib import pyplot as plt
 # import data_setup
 from Ray import data_load_save as Ray_io
 from Ray import channel_corr as ch_corr
-from Ray import basic_fun
-from Ray.basic_info import motor_movement_data_folder
+from predicament.utils import file_utils
+from predicament.utils.config import motor_movement_data_folder
 from Ray.Event_details import all_EEG_events
 
 E4_file_names = ['ACC', 'BVP', 'EDA', 'HR', 'IBI', 'TEMP'] # physiological data, tags.csv not included
@@ -70,7 +70,7 @@ def get_EEG_event_duration(EEG_data = None):
 if __name__ == '__main__':
     # Load EEG and E4 (physiological data)
     EEG_files, E4_files = Ray_io.set_up(isEEG=True, isE4=False)
-    # basic_fun.gen_train_test_valid(EEG_files)
+    # file_utils.gen_train_test_valid(EEG_files)
 
     # Visualize VG data (EEG 250Hz)
     # EEG_partID, EEG_channel, EEG_event = 'VG_06', 'Fpz-O1', 'familiar_music'

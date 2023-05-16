@@ -6,8 +6,8 @@ Created on Wed Jun 29 23:14:19 2022
 """
 
 import json
-from Ray.basic_fun import local2unix
-from Ray.basic_info import EEG_buffer
+from predicament.utils.file_utils import local2unix
+from predicament.config.basic_info import EEG_buffer
 
 all_EEG_events = {
     0: "setup",

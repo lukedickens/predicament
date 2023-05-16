@@ -3,10 +3,15 @@
 Created on Wed Jun 29 18:51:32 2022
 
 @author: Zerui Mu
+
+Utility functions
 """
 
 import random
 import time
+
+from predicament.utils.config import motor_movement_data_folder
+
 
 def local2unix(datetime):
     timeArray = time.strptime(datetime, "%d-%m-%Y %H:%M:%S")
@@ -49,6 +54,10 @@ def _test_local2unix():
 
 def _test_unix2local():
     print(unix2local(1631112286))
+    
+def get_evaluation_datadir(n_classes, func):
+    data_folder = os.path.join(motor_movement_data_folder, './Ray/{}classes_{}/'.format(n_classes, func))
+
 
 # _test_local2unix()
 # _test_unix2local()
