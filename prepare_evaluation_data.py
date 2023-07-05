@@ -10,14 +10,14 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 # import data_setup
-from Ray import data_load_save as Ray_io
+from Ray import data_load_save
 from Ray import channel_corr as ch_corr
 from predicament.utils import file_utils
 from predicament.utils.config import motor_movement_data_folder
 from Ray.Event_details import all_EEG_events
 
 E4_file_names = ['ACC', 'BVP', 'EDA', 'HR', 'IBI', 'TEMP'] # physiological data, tags.csv not included
-EEG_channels = {1:"Fpz-O1", 2:"Fpz-O2", 3:"Fpz-F7", 4:"F8-F7", 5:"F7-01", 6:"F8-O2", 7:"Fpz-F8"}
+EEG_channels = {1:"EEG Fpz-O1", 2:"EEG Fpz-O2", 3:"EEG Fpz-F7", 4:"EEG F8-F7", 5:"EEG F7-01", 6:"EEG F8-O2", 7:"EEG Fpz-F8"}
 
 def gen_EEG_train_test_to_csv(event_list, multiply, func, windows = 1, train_ratio = 0.9, EEG_data = None):
     """
@@ -27,9 +27,9 @@ def gen_EEG_train_test_to_csv(event_list, multiply, func, windows = 1, train_rat
     """
 
     if func == 'mix':
-        train_data, test_data, train_label, test_label = Ray_io.gen_EEG_traintest_to_csv_mix(event_list, multiply, windows, train_ratio, EEG_data)
+        train_data, test_data, train_label, test_label = data_load_save.gen_EEG_traintest_to_csv_mix(event_list, multiply, windows, train_ratio, EEG_data)
     elif func == 'part':
-        train_data, test_data, train_label, test_label = Ray_io.gen_EEG_traintest_to_csv_part(event_list, multiply, windows, train_ratio, EEG_data)
+        train_data, test_data, train_label, test_label = data_load_save.gen_EEG_traintest_to_csv_part(event_list, multiply, windows, train_ratio, EEG_data)
     else:
         print("Please check the function! (mix, part)")
         return None
@@ -47,13 +47,15 @@ def gen_EEG_train_test_to_csv(event_list, multiply, func, windows = 1, train_rat
         data_count[d] += 1
     print("test data label: {}".format(data_count))
 
-    data_folder = os.path.join(motor_movement_data_folder, './Ray/{}classes_{}/'.format(classes, func))
-    if not os.path.exists(data_folder):  # If the folder doesn't exist, create one
-        os.mkdir(data_folder)
-    train_data.to_csv(os.path.join(data_folder, './training_set.csv'), header=None, index=None)
-    test_data.to_csv(os.path.join(data_folder, './test_set.csv'), header=None, index=None)
-    train_label.to_csv(os.path.join(data_folder, './training_label.csv'), header=None, index=None)
-    test_label.to_csv(os.path.join(data_folder, './test_label.csv'), header=None, index=None)
+
+    results_dir = os.path.join(motor_movement_data_folder, './{}classes_{}/'.format(classes, func))
+    print(f"results_dir = {results_dir}")
+    if not os.path.exists(results_dir):  # If the folder doesn't exist, create one
+        os.mkdir(results_dir)
+    train_data.to_csv(os.path.join(results_dir, './training_set.csv'), header=None, index=None)
+    test_data.to_csv(os.path.join(results_dir, './test_set.csv'), header=None, index=None)
+    train_label.to_csv(os.path.join(results_dir, './training_label.csv'), header=None, index=None)
+    test_label.to_csv(os.path.join(results_dir, './test_label.csv'), header=None, index=None)
     return (train_data, test_data, train_label, test_label)
 
 def get_EEG_event_duration(EEG_data = None):
@@ -69,14 +71,15 @@ def get_EEG_event_duration(EEG_data = None):
 
 if __name__ == '__main__':
     # Load EEG and E4 (physiological data)
-    EEG_files, E4_files = Ray_io.set_up(isEEG=True, isE4=False)
+    EEG_files, E4_files = data_load_save.set_up(
+        isEEG=True, isE4=False)
     # file_utils.gen_train_test_valid(EEG_files)
 
     # Visualize VG data (EEG 250Hz)
-    # EEG_partID, EEG_channel, EEG_event = 'VG_06', 'Fpz-O1', 'familiar_music'
-    # plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event(EEG_channel, EEG_event), label = EEG_channel)
-    # plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event('F7-01', EEG_event), label = 'F7-01')
-    # plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event('Fpz-F8', EEG_event), label = 'Fpz-F8')
+#    EEG_partID, EEG_channel, EEG_event = 'VG_06', 'EEG Fpz-O1', 'familiar_music'
+#    plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event(EEG_channel, EEG_event), label = EEG_channel)
+#    plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event('EEG F7-01', EEG_event), label = 'F7-01')
+#    plt.plot(EEG_files[EEG_partID].get_EEG_by_channel_and_event('EEG Fpz-F8', EEG_event), label = 'Fpz-F8')
 
     # # Visualize E4 data (physiological data)
     # E4_partID, E4_file, E4_event = 'VG_01', 'HR', 'exper_video'
@@ -90,7 +93,7 @@ if __name__ == '__main__':
     gen_EEG_train_test_to_csv(event_list_EEGDL, multiply=10000, func='part', EEG_data=EEG_files)
 
     # calculate correlation
-    # EEG_partID, EEG_event, EEG_channel_1, EEG_channel_2 = 'VG_01', 'familiar_music', 'Fpz-O1', 'F7-01'
+    # EEG_partID, EEG_event, EEG_channel_1, EEG_channel_2 = 'VG_01', 'familiar_music', 'EEG Fpz-O1', 'EEG F7-01'
     # event_list_corr = ["familiar_music", "wildlife_video", "Tchaikovsky", "exper_video"]
     # # corrs = ch_corr.cal_corr_PE_all_all(EEG_files, event_list_corr)
 

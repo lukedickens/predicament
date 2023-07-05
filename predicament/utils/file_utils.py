@@ -10,20 +10,28 @@ Utility functions
 import random
 import time
 
-from predicament.utils.config import motor_movement_data_folder
+from predicament.utils.config import MOTOR_MOVEMENT_DATA_FOLDER
 
 
 def local2unix(datetime):
+    """
+    Convert date-time stamps in datafiles to unix times.
+    """
     timeArray = time.strptime(datetime, "%d-%m-%Y %H:%M:%S")
     timestamp = time.mktime(timeArray)
     return timestamp
 
 def unix2local(timestamp):
+    """
+    Convert unix times to date-time stamps in datafiles.
+    """
     time_local = time.localtime(timestamp)
     datetime = time.strftime("%d-%m-%Y %H:%M:%S", time_local)
     return datetime
 
 def gen_train_test_valid(data, test_ratio = 0.2, val_ratio = 0.2):
+    """
+    """
     if test_ratio + val_ratio > 0.5:
         print("Too much test & validation data!")
         return None, None, None

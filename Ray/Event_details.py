@@ -7,7 +7,7 @@ Created on Wed Jun 29 23:14:19 2022
 
 import json
 from predicament.utils.file_utils import local2unix
-from predicament.config.basic_info import EEG_buffer
+from predicament.utils.config import EEG_buffer
 
 all_EEG_events = {
     0: "setup",
@@ -40,12 +40,22 @@ class Event_time_details(object):
         self.exp_start_time = local2unix(date + " " + time_hms)
 
     def set_event(self, event_name, start, end, validation = True):
+        print(f"(start, end) = {(start, end)}")
         # validation: if False, means the time is estimated, without verification
         if event_name not in all_EEG_events.values():
             print("The event ({}) is not in the event list. Please check!".format(event_name))
             return
-        start_timestamp = local2unix(self.exp_date + " " + start) if start != None else None
-        end_timestamp = local2unix(self.exp_date + " " + end) if end != None else None
+#        start_timestamp = local2unix(self.exp_date + " " + start) if start != None else None
+#        end_timestamp = local2unix(self.exp_date + " " + end) if end != None else None
+        try:
+            start_timestamp = local2unix(self.exp_date + " " + start)
+        except:
+            state_timestamp = None
+        try:
+            end_timestamp = local2unix(self.exp_date + " " + end)
+        except:
+            end_timestamp = None
+        print(f"(start_timestamp, end_timestamp) = {(start_timestamp, end_timestamp)}")
         self.events_info[event_name] = {"start": start_timestamp, "end": end_timestamp, 'valid': validation}
 
     def check_has_event(self, event_name) -> bool:
@@ -58,7 +68,9 @@ class Event_time_details(object):
         exp_start = self.exp_start_time
         start = int(self.events_info[event_name]['start'] - exp_start)
         end = int(self.events_info[event_name]['end'] - exp_start)
-        spindles = [{'start': start*1.0, 'end': start + 1.0} \
-            for start in range(start+EEG_buffer, end-EEG_buffer, windows)]
+        spindles = [{'start': this_start*1.0, 'end': this_start + 1.0} \
+            for this_start in range(start+EEG_buffer, end-EEG_buffer, windows)]
         with open(json_path, 'w') as f:
             json.dump(spindles ,f)
+            
+

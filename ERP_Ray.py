@@ -40,21 +40,28 @@ print(X_validate.shape[0], 'val samples')
 
 # model setting
 def run(batch_size, kernel_length, dropout_rate):
-    model = EEGNet(nb_classes = len(event_id.keys()), Chans = chans, Samples = samples, 
-                dropoutRate = dropout_rate, kernLength = kernel_length, F1 = 8, D = 2, F2 = 16, 
-                dropoutType = 'Dropout')
+    model = EEGNet(
+        nb_classes = len(event_id.keys()),
+        Chans = chans,
+        Samples = samples, 
+        dropoutRate = dropout_rate,
+        kernLength = kernel_length,
+        F1 = 8, D = 2, F2 = 16, 
+        dropoutType = 'Dropout')
 
-    model.compile(loss='categorical_crossentropy', optimizer='adam', 
-                metrics = ['accuracy'])
+    model.compile(
+        loss='categorical_crossentropy', optimizer='adam', 
+        metrics = ['accuracy'])
 
     tmp_file_path = r'./Dissertation/eegmodels/examples/tmp/checkpoint.h5'
     checkpointer = ModelCheckpoint(filepath=tmp_file_path, verbose=1,
                                 save_best_only=True)
     class_weights = {i:1 for i in range(len(event_id.keys()))}
 
-    fittedModel = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
-                            verbose = 2, validation_data=(X_validate, Y_validate),
-                            callbacks=[checkpointer], class_weight = class_weights)
+    fittedModel = model.fit(
+        X_train, Y_train, batch_size = batch_size, epochs = epochs, 
+        verbose = 2, validation_data=(X_validate, Y_validate),
+        callbacks=[checkpointer], class_weight = class_weights)
 
     # save training result
     model.load_weights(tmp_file_path)

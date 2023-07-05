@@ -9,15 +9,16 @@ import os
 import pandas as pd
 import random
 
-from predicament.config.basic_info import data_folder, motor_movement_data_folder, EEG_buffer, VG_Hz
+from predicament.utils.config import EEG_buffer, VG_Hz
+from predicament.utils.config import EVENT_DETAILS_PATH
+from predicament.utils.config import EXP_INFO_PATH
 from predicament.utils.file_utils import unix2local
 from Ray.Event_details import Event_time_details
 from Ray import EEG_data, E4_data
 
-event_details_path = os.path.join(data_folder, './event_details.csv')
-exp_info_path = os.path.join(data_folder, './exp_info.csv')
 
-def save_info_to_csv():
+##TODO weird cyclic dependency where file is loaded and saved to same location
+def save_info_to_csv(event_details_path=EVENT_DETAILS_PATH, exp_info_path=EXP_INFO_PATH):
     EEG_files = EEG_data.read_all_VG_files()
     event_details_dic = {
         'partID': [],
@@ -33,7 +34,8 @@ def save_info_to_csv():
         'exp_start': []
     }
 
-    for part in EEG_files.keys():
+    participant_ids = list(EEG_files.keys())
+    for part in participant_ids:
         EEG_part = EEG_files[part]
         for Ev_name, EV_info in EEG_part.event_details.events_info.items():
             start_time = unix2local(EV_info['start']).split(' ')[1] if EV_info['start'] != None else 'None' # only need time from datetime
@@ -56,19 +58,37 @@ def save_info_to_csv():
     with open(exp_info_path, 'w', newline='') as f:
         exp_info_df.to_csv(f, index = False)
 
-def load_info_from_csv():
+def load_info_from_csv(event_details_path=EVENT_DETAILS_PATH, exp_info_path=EXP_INFO_PATH):
+    """
+    Event details
+    """
+    print(f"event_details_path = {event_details_path}")
     event_details_df = pd.read_csv(event_details_path, index_col=0)
+    print(f"event_details_df.loc['VG_01'] = {event_details_df.loc['VG_01']}")
     exp_info_df = pd.read_csv(exp_info_path, index_col=0)
 
     part_list = list(exp_info_df.index)
     ev_details = {}
 
     for partID in part_list:
+
         ev_detail = Event_time_details(partID)
         ev_detail.set_exp_datetime(exp_info_df.loc[partID]['date'], exp_info_df.loc[partID]['exp_start'])    
         for event in event_details_df.loc[partID,].iterrows():
-            start = str(event[1]['start']) if event[1]['start'] != 'None' else None
-            end = str(event[1]['end']) if event[1]['end'] != 'None' else None
+            print(f"event = {event}")
+            print(f"event[1]['end'] = {event[1]['end']}")
+            print(f"type(event[1]['end']) = {type(event[1]['end'])}")
+#            start = str(event[1]['start']) if event[1]['start'] != 'None' else None
+#            end = str(event[1]['end']) if event[1]['end'] != 'None' and not math.isnan(event[1]['end']) else None
+            try:
+                start = str(event[1]['start'])
+            except ValueError:
+                start = None
+            try:
+                end = str(event[1]['end'])
+            except ValueError:
+                end = None
+            print(f"partID: end = {partID}:{end}")
             ev_detail.set_event(event[1]['event'], start, end, event[1]['valid'])
         ev_details[partID] = ev_detail
     return ev_details
@@ -93,21 +113,23 @@ def gen_EEG_traintest_to_csv_mix(event_list, multiply, windows = 1, train_ratio 
     # mix all partcipants data together and separate train_set and test_set by train_ratio
     if EEG_files == None:
         EEG_files, _ = set_up(isE4 = False)
+    #TODO what is fs(EEG sample rate)? And how can we multiply by it before it is assigned?
+    # how is row size determined? this ends up being the width of the data matrix produced
     row_size, fs, interval = 4096, VG_Hz, fs*2 
     # channel_batch_size = {
-    #     'Fpz-O1': row_size // 7,
-    #     'Fpz-O2': row_size // 7,
-    #     'Fpz-F7': row_size // 7,
-    #     'F8-F7': row_size // 7,
-    #     'F7-01': row_size // 7,
-    #     'F8-O2': row_size // 7,
-    #     'Fpz-F8': row_size - (row_size // 7) * 6,
+    #     'EEG Fpz-O1': row_size // 7,
+    #     'EEG Fpz-O2': row_size // 7,
+    #     'EEG Fpz-F7': row_size // 7,
+    #     'EEG F8-F7': row_size // 7,
+    #     'EEG F7-01': row_size // 7,
+    #     'EEG F8-O2': row_size // 7,
+    #     'EEG Fpz-F8': row_size - (row_size // 7) * 6,
     # }
     channel_batch_size = {
-        'Fpz-O1': row_size // 4,
-        'Fpz-O2': row_size // 4,
-        'F8-F7': row_size // 4,
-        'Fpz-F8': row_size - (row_size // 4) * 3,
+        'EEG Fpz-O1': row_size // 4,
+        'EEG Fpz-O2': row_size // 4,
+        'EEG F8-F7': row_size // 4,
+        'EEG Fpz-F8': row_size - (row_size // 4) * 3,
     }
     data_label_list = {'train': [], 'test':[]}
     label_dic = {label: i for i, label in enumerate(event_list)}
@@ -120,11 +142,18 @@ def gen_EEG_traintest_to_csv_mix(event_list, multiply, windows = 1, train_ratio 
         "exper_video": 1.5
     }
 
-    for part in EEG_files.keys():
+    participant_ids = list(EEG_files.keys())
+    for part in participant_ids:
         for event_name in event_list:
-            if EEG_files[part].event_details.check_has_event(event_name) and EEG_files[part].event_details.check_event_has_start_and_end(event_name):
-                data_length = (EEG_files[part].event_details.events_info[event_name]['end'] - \
-                    EEG_files[part].event_details.events_info[event_name]['start'] - 2 * EEG_buffer) * fs
+            if EEG_files[part].event_details.check_has_event(event_name) and \
+                    EEG_files[part].event_details.check_event_has_start_and_end(event_name):
+                #TODO decypher
+                # universal start end times for participant-condition event
+                event_end = EEG_files[part].event_details.events_info[event_name]['end']
+                event_start = EEG_files[part].event_details.events_info[event_name]['start']
+                # duration of participant-condition event in samples
+                # equal to sample rate(fs) times the buffered-duration in seconds
+                data_length = (event_end - event_start - 2 * EEG_buffer) * fs
                 test_length = round(data_length/fs * (1-train_ratio)) * fs
                 event_data_all_chans = {chan: EEG_files[part].get_EEG_by_channel_and_event(channel=chan, event_name=event_name) \
                     for chan in channel_batch_size.keys()}
@@ -162,22 +191,26 @@ def gen_EEG_traintest_to_csv_part(event_list, multiply, windows = 1, train_ratio
     # separate train_set and test_set by participant and the train_ratio
     if EEG_files == None:
         EEG_files, _ = set_up(isE4 = False)
+    # row size is total width of data matrix. So time window size varies depending on number of channels
+    # at 4096 for 4 channels, thats 1024 smples per channel, 1024/250 \approx 4 seconds
+    # fs is the sample frequency
+    # interval is the step size of the windowing in sample steps (2*VG_Hz means 2 seconds worth)
     row_size, fs, interval = 4096, VG_Hz, VG_Hz*2
     train_num_per_class_limit, test_num_per_class_limit = 1000, 100
     # channel_batch_size = {
-    #     'Fpz-O1': row_size // 7,
-    #     'Fpz-O2': row_size // 7,
-    #     'Fpz-F7': row_size // 7,
-    #     'F8-F7': row_size // 7,
-    #     'F7-01': row_size // 7,
-    #     'F8-O2': row_size // 7,
-    #     'Fpz-F8': row_size - (row_size // 7) * 6,
+    #     'EEG Fpz-O1': row_size // 7,
+    #     'EEG Fpz-O2': row_size // 7,
+    #     'EEG Fpz-F7': row_size // 7,
+    #     'EEG F8-F7': row_size // 7,
+    #     'EEG F7-01': row_size // 7,
+    #     'EEG F8-O2': row_size // 7,
+    #     'EEG Fpz-F8': row_size - (row_size // 7) * 6,
     # }
     channel_batch_size = {
-        'Fpz-O1': row_size // 4,
-        'Fpz-O2': row_size // 4,
-        'F8-F7': row_size // 4,
-        'Fpz-F8': row_size - (row_size // 4) * 3,
+        'EEG Fpz-O1': row_size // 4,
+        'EEG Fpz-O2': row_size // 4,
+        'EEG F8-F7': row_size // 4,
+        'EEG Fpz-F8': row_size - (row_size // 4) * 3,
     }
     label_dic = {label: i for i, label in enumerate(event_list)}
     # train and test participants list
@@ -214,6 +247,7 @@ def gen_EEG_traintest_to_csv_part(event_list, multiply, windows = 1, train_ratio
         for event_name in event_list:
             if label_dic[event_name] not in test_data_label_dic.keys():
                 test_data_label_dic[label_dic[event_name]] = []
+            # events to use are present and have time-stamps
             if EEG_files[part].event_details.check_has_event(event_name) and EEG_files[part].event_details.check_event_has_start_and_end(event_name):
                 data_length = (EEG_files[part].event_details.events_info[event_name]['end'] - \
                     EEG_files[part].event_details.events_info[event_name]['start'] - 2 * EEG_buffer) * fs

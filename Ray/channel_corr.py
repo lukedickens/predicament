@@ -1,7 +1,18 @@
+"""
+What does this module do?
+
+
+Measures correlation between different channels?
+"""
+
+
 import numpy as np
 import pandas as pd
 from typing import Dict
-from Ray.EEG_data import EEG_channels, EEG_data_class
+#from Ray.EEG_data import EEG_channels
+from Ray.EEG_data import EEG_data_obj
+
+#EEG_channels = {1:"EEG Fpz-O1", 2:"EEG Fpz-O2", 3:"EEG Fpz-F7", 4:"EEG F8-F7", 5:"EEG F7-01", 6:"EEG F8-O2", 7:"EEG Fpz-F8"}
 
 # Nomenclature:
 # cal_corr_PE_(1 or all)_(1 or all or toge)
@@ -10,7 +21,7 @@ from Ray.EEG_data import EEG_channels, EEG_data_class
 # second (1 or all or toge) indicates events num:
 #   all means seperately, toge means all events combine together as one
 
-def cal_corr_PE_1_1(EEGdata: Dict[str, EEG_data_class], partID, event):
+def cal_corr_PE_1_1(EEGdata: Dict[str, EEG_data_obj], partID, event):
     print(partID, event)
     EEG_part_data = EEGdata[partID]
     if not EEG_part_data.event_details.check_has_event(event) \
@@ -25,11 +36,11 @@ def cal_corr_PE_1_1(EEGdata: Dict[str, EEG_data_class], partID, event):
 
     return corr_df
 
-def cal_corr_PE_1_all(EEGdata: Dict[str, EEG_data_class], partID, event_list):
+def cal_corr_PE_1_all(EEGdata: Dict[str, EEG_data_obj], partID, event_list):
     corr = {event: cal_corr_PE_1_1(EEGdata, partID, event) for event in event_list}
     return corr
 
-def cal_corr_PE_1_toge(EEGdata: Dict[str, EEG_data_class], partID, event_list):
+def cal_corr_PE_1_toge(EEGdata: Dict[str, EEG_data_obj], partID, event_list):
     EEG_part_data = EEGdata[partID]
     chs_data = {ch: [] for ch in EEG_channels.values()}
     for event in event_list:
@@ -47,10 +58,10 @@ def cal_corr_PE_1_toge(EEGdata: Dict[str, EEG_data_class], partID, event_list):
 
     return corr_df
 
-def cal_corr_PE_all_all(EEG_data: Dict[str, EEG_data_class], event_list):
+def cal_corr_PE_all_all(EEG_data: Dict[str, EEG_data_obj], event_list):
     corr = {part: cal_corr_PE_1_all(EEG_data, part, event_list) for part in EEG_data.keys()}
     return corr
 
-def call_corr_PE_all_toge(EEG_data: Dict[str, EEG_data_class], event_list):
+def call_corr_PE_all_toge(EEG_data: Dict[str, EEG_data_obj], event_list):
     corr = {part: cal_corr_PE_1_toge(EEG_data, part, event_list) for part in EEG_data.keys()}
     return corr

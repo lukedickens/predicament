@@ -9,7 +9,7 @@ import os
 from typing import Dict
 import pandas as pd
 
-from predicament.config.basic_info import data_folder, E4_file_paths, E4_buffer
+from predicament.utils.config import STUDY_DATA_FOLDER, E4_file_paths, E4_buffer
 from Ray.Event_details import Event_time_details
 
 E4_file_names = ['ACC', 'BVP', 'EDA', 'HR', 'IBI', 'TEMP'] # physiological data, tags.csv not included
@@ -46,7 +46,7 @@ def read_E4_file(part_ID) -> E4_data_class:
         print("Error:", e)
     data = {}
     for file_name in E4_file_names:
-        E4_file_path = os.path.join(data_folder, E4_file_paths[part_ID], file_name + '.csv')
+        E4_file_path = os.path.join(STUDY_DATA_FOLDER, E4_file_paths[part_ID], file_name + '.csv')
         E4_file = pd.read_csv(E4_file_path)
         data[file_name] = {
             'time': E4_file.columns[0],

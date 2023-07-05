@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+Run end-to-end evaluation of Thin_Residual_Convolutional_Neural_Network
+"""
+
+
 
 # Import useful packages
 from __future__ import absolute_import
@@ -31,7 +36,7 @@ sess = tf.Session(config=config)
 
 # Your Dataset Location, for example EEG-Motor-Movement-Imagery-Dataset
 # The CSV file should be named as training_set.csv, training_label.csv, test_set.csv, and test_label.csv
-classes = 5 # 有几类数据
+classes = 5 #
 dataset_func = 'mix' # mix and part (mix together or hold-out participant)
 DIR = '../data/EEG-Motor-Movement-Imagery-Dataset/Ray/{}classes_{}/'.format(classes, dataset_func)
 SAVE = r'./Dissertation/EEG_DL/Saved_Files/' + Model + '/'
