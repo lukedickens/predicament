@@ -10,7 +10,7 @@ Utility functions
 import random
 import time
 
-from predicament.utils.config import MOTOR_MOVEMENT_DATA_FOLDER
+from predicament.utils.config import EVALUATION_BASE_PATH
 
 
 def local2unix(datetime):
@@ -64,7 +64,7 @@ def _test_unix2local():
     print(unix2local(1631112286))
     
 def get_evaluation_datadir(n_classes, func):
-    data_folder = os.path.join(motor_movement_data_folder, './Ray/{}classes_{}/'.format(n_classes, func))
+    data_folder = os.path.join(MOTOR_MOVEMENT_DATA_FOLDER, './Ray/{}classes_{}/'.format(n_classes, func))
 
 
 # _test_local2unix()

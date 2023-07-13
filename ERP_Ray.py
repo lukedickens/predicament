@@ -1,5 +1,7 @@
+#
 import numpy as np
 import pandas as pd
+import os
 
 # EEGNet-specific imports
 from eegmodels.EEGModels import EEGNet
@@ -7,12 +9,18 @@ from tensorflow.keras import utils as np_utils
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras import backend as K
 
+#
+from predicament.utils.config import MOTOR_MOVEMENT_DATA_FOLDER
+
 K.set_image_data_format('channels_last')
-event_id = dict(familiar_music=1, wildlife_video=2, family_inter=3, Tchaikovsky=4, exper_video=5)
+event_id = dict(familiar_music=1, wildlife_video=2, family_inter=3, tchaikovsky=4, exper_video=5)
 kernels, chans, samples, epochs = 1, 4, 1024, 200
 
 # data loading
-DIR = 'D:/Work/UCL/Modules/Dissertation/data/EEG-Motor-Movement-Imagery-Dataset/Ray/5classes_mix/'
+#DIR = 'D:/Work/UCL/Modules/Dissertation/data/EEG-Motor-Movement-Imagery-Dataset/Ray/5classes_mix/'
+#subdir = '5classes_mix'
+subdir = '5classes_part'
+DIR = os.path.join(MOTOR_MOVEMENT_DATA_FOLDER, subdir)
 train_data = pd.read_csv(DIR + 'training_set.csv', header=None)
 train_data = np.array(train_data).astype('float32')
 train_labels = pd.read_csv(DIR + 'training_label.csv', header=None)

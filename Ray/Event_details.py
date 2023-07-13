@@ -15,7 +15,7 @@ all_EEG_events = {
     2: "exper_video",
     3: "wildlife_video",
     4: "familiar_music",
-    5: "Tchaikovsky",
+    5: "tchaikovsky",
     6: "break",
     7: "family_inter",
     8: "takeoff_EEG",

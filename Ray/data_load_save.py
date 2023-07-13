@@ -138,7 +138,7 @@ def gen_EEG_traintest_to_csv_mix(event_list, multiply, windows = 1, train_ratio 
         "familiar_music": 1.0,
         "wildlife_video": 1.0,
         "family_inter": 0.75,
-        "Tchaikovsky": 1.0,
+        "tchaikovsky": 1.0,
         "exper_video": 1.5
     }
 

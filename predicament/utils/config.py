@@ -8,12 +8,18 @@ Created on Wed Jun 29 23:59:34 2022
 import os
 BASE_DATA_FOLDER = os.environ.get('PREDICAMENT_DATA_DIR', 'data')
 STUDY_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'CARE_HOME_DATA') +'/'
-MOTOR_MOVEMENT_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'EEG-Motor-Movement-Imagery-Dataset') +'/'
-
 EVENT_DETAILS_PATH = os.path.join(STUDY_DATA_FOLDER, './event_details.csv')
 EXP_INFO_PATH = os.path.join(STUDY_DATA_FOLDER, './exp_info.csv')
 
+EVALUATION_BASE_SUBDIR = 'evaluation_data'
+EVALUATION_BASE_PATH = os.path.join(BASE_DATA_FOLDER)
+if not os.path.exists(EVALUATION_BASE_PATH):
+    print(
+        f"Creating train test base dir at:\n\t{EVALUATION_BASE_PATH}")
+    os.makedirs(EVALUATION_BASE_PATH)
 
+
+#TODO needs renaming
 E4_file_paths = {
     'VG_01': r'./VG01/E4_8921_15_44/',
     # 'VG_02': None,
@@ -46,8 +52,7 @@ EDF_FILE_SUBPATHS = {
 
 EDF_FILE_PATHS = {
     part_ID : os.path.join(STUDY_DATA_FOLDER, subpath) \
-        for part_ID, subpath in EDF_FILE_SUBPATHS.items()
-    }
+        for part_ID, subpath in EDF_FILE_SUBPATHS.items()}
 
 ## get the channel id from the channel name
 ALL_DREEM_CHANNELS = [ # 1&5, 2&6, 3&4 similar, EEG data (1-7)
@@ -59,8 +64,9 @@ ALL_DREEM_CHANNELS = [ # 1&5, 2&6, 3&4 similar, EEG data (1-7)
     'EEG F7-01', # 5
     'EEG F8-O2', # 6
     'EEG Fpz-F8', # 7
+    # Positiongram does not exist in VG_01, VG_02, VG_03, VG_05
+    # in these files, old code changes index (9-13) to (8-12)
     'Positiongram',  # 8
-    # Positiongram does not exist in VG_01, VG_02, VG_03, VG_05; in these files, we need to change index (9-13) to (8-12)
     'PulseOxy Infrare', # 9
     'PulseOxy Red Hea', # 10
     'Respiration x', # 11
@@ -74,7 +80,7 @@ EEG_CONDITIONS = {
     "exper_video",
     "wildlife_video",
     "familiar_music",
-    "Tchaikovsky",
+    "tchaikovsky",
     "break",
     "family_inter",
     "takeoff_EEG",
@@ -94,6 +100,10 @@ ALL_DREEM_CHANNELS_LOOKUP = {v:k for k,v in enumerate(ALL_DREEM_CHANNELS) }
 DREEM_EEG_CHANNELS = [
     'EEG Fpz-O1', 'EEG Fpz-O2', 'EEG Fpz-F7', 'EEG F8-F7', 'EEG F7-01',
     'EEG F8-O2', 'EEG Fpz-F8']
+# Analysis suggests that there may be extreme correlation in some pairs of
+# channels so the following minimal set is suggested
+DREEM_MINIMAL_CHANNELS = [
+    'EEG Fpz-O1', 'EEG Fpz-O2', 'EEG Fpz-F7', 'EEG Fpz-F8']
 DREEM_CHANNELS_EXCLUDED = [ ch_name for ch_name in ALL_DREEM_CHANNELS_LOOKUP 
     if ch_name not in DREEM_EEG_CHANNELS]
 # not used any more (previously the first 4 characters were removed
@@ -101,9 +111,9 @@ EEG_CHANNEL_SHORTNAMES = {ch_name:ch_name[4:] for ch_name in DREEM_EEG_CHANNELS}
 
 FULL_PARTICIPANT_LIST = list(EDF_FILE_PATHS.keys())
 # participants will all valid events in the target set of conditions
-COMPLETE_DREEM_PARTICIPANTS =   [
+TARGET_CONDITIONS =   [
         "exper_video", "wildlife_video", "familiar_music",
-        "Tchaikovsky", "family_inter"]
+        "tchaikovsky", "family_inter"]
 
     # participant missing exp video, break and family
 E4_participant_ids = list(E4_file_paths.keys())
@@ -117,10 +127,17 @@ DEFAULT_WINDOW_SIZE = 1024
 DEFAULT_WINDOW_STEP = DEFAULT_WINDOW_SIZE//2
 
 
-# old names
+
+
+
+
+## old names
 EEG_buffer = BUFFER_INTERVAL 
 E4_buffer = BUFFER_INTERVAL
 VG_Hz = DEFAULT_SAMPLE_RATE
 
 VG_file_paths = EDF_FILE_SUBPATHS 
 VG_participant_ids = FULL_PARTICIPANT_LIST
+
+MOTOR_MOVEMENT_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'EEG-Motor-Movement-Imagery-Dataset') +'/'
+
