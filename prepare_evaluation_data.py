@@ -7,8 +7,11 @@ Created on Wed Jun  8 18:09:32 2022
 """
 
 import os
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from datetime import datetime
+import configparser
 
 # import data_setup
 from predicament.utils.config import DREEM_EEG_CHANNELS, DREEM_MINIMAL_CHANNELS
@@ -42,23 +45,77 @@ def load_labelled_data(
             copy=False)
     data_by_participant, label_mapping = merge_condition_data(
         all_windowed_data)
-    return data_by_participant, label_mapping
+    # record information about data
+    first_ID = list(all_participants_data.keys())[0]
+    # all sample rates are the same
+    sample_rate = all_participants_data[first_ID].sample_rate
+    config = configparser.ConfigParser()
+    config['LOAD'] = dict(
+        participant_list=participant_list,
+        conditions=conditions, channels=channels,
+        n_channels=len(channels), sample_rate=sample_rate,
+        window_size=window_size, window_step=window_step,
+        label_mapping=label_mapping)
+        
+    return data_by_participant, config
     
     
 def iterate_between_subject_cv_partition(**loadargs):
-    data_by_participant, label_mapping = load_labelled_data(**loadargs)
+    data_by_participant, config = load_labelled_data(**loadargs)
+    config['PARTITION'] = {'type':'between_subject'}
     for fold in between_subject_cv_partition(data_by_participant):
         tr_dt, tr_lb, ts_dt, ts_lb = fold
-        yield (tr_dt, tr_lb, ts_dt, ts_lb,label_mapping)
+        yield (tr_dt, tr_lb, ts_dt, ts_lb, config)
+
+
+def prepare_between_subject_cv_partition_files(**loadargs):
+    # datetime object containing current date and time
+    now = datetime.now()
+     
+    print("now =", now)
+
+    # dd/mm/YY H:M:S
+    dt_string = now.strftime("%Y%m%d%H%M%S")
+    print("date and time =", dt_string)
+    parent_path = os.path.join(EVALUATION_BASE_PATH,dt_string)
+    if not os.path.exists(parent_path):
+        os.makedirs(parent_path)
+    print(f"saving to subfolders of {parent_path}")
+
+
+    for f,fold in enumerate(iterate_between_subject_cv_partition(**loadargs)):
+        trn_dat, trn_lab, tst_dat, tst_lab, config = fold
+        n_train = trn_dat.shape[0]
+        n_test = tst_dat.shape[0]
+        # fold path is subdirectory of parent
+        fold_path = os.path.join(parent_path, f'fold{f}')
+        if not os.path.exists(fold_path):
+            os.makedirs(fold_path)
+        print(f"Saving fold {f} data in {fold_path} with {n_train} train and {n_test} test points")
+        # reshape label arrays
+        trn_lab = np.reshape(trn_lab, (-1,1))
+        tst_lab = np.reshape(tst_lab, (-1,1))
+        # save config file with the 
+        config['PARTITION']['fold'] = str(f)
+        config['PARTITION']['n_train'] = str(n_train)
+        config['PARTITION']['n_test'] = str(n_test)
+        config_fpath = os.path.join(fold_path, 'details.cfg')
+        with open(config_fpath, 'w') as configfile:
+            config.write(configfile)
+        np.savetxt(
+            os.path.join(fold_path, "training_set.csv"),
+            trn_dat, delimiter=",")
+        np.savetxt(
+            os.path.join(fold_path, "training_label.csv"),
+            trn_lab, delimiter=",")
+        np.savetxt(
+            os.path.join(fold_path, "test_set.csv"),
+            tst_dat, delimiter=",")
+        np.savetxt(
+            os.path.join(fold_path, "test_label.csv"),
+            tst_lab, delimiter=",")
+
 
 if __name__ == '__main__':
-
-    for fold in iterate_between_subject_cv_partition(
-            participant_list=FULL_PARTICIPANT_LIST[:3]):
-        tr_dt, tr_lb, ts_dt, ts_lb, lb_map = fold
-        print(f"tr_dt.shape = {tr_dt.shape}")
-        print(f"tr_lb.shape = {tr_lb.shape}")
-        print(f"ts_dt.shape = {ts_dt.shape}")
-        print(f"ts_lb.shape = {ts_lb.shape}")
-        print(f"lb_map = {lb_map}")
+    prepare_between_subject_cv_partition_files()
 

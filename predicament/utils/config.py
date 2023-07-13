@@ -11,8 +11,9 @@ STUDY_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'CARE_HOME_DATA') +'/'
 EVENT_DETAILS_PATH = os.path.join(STUDY_DATA_FOLDER, './event_details.csv')
 EXP_INFO_PATH = os.path.join(STUDY_DATA_FOLDER, './exp_info.csv')
 
-EVALUATION_BASE_SUBDIR = 'evaluation_data'
-EVALUATION_BASE_PATH = os.path.join(BASE_DATA_FOLDER)
+EVALUATION_BASE_SUBDIR = 'evaluation'
+EVALUATION_BASE_PATH = os.path.join(
+    BASE_DATA_FOLDER, EVALUATION_BASE_SUBDIR)
 if not os.path.exists(EVALUATION_BASE_PATH):
     print(
         f"Creating train test base dir at:\n\t{EVALUATION_BASE_PATH}")
