@@ -18,6 +18,14 @@ if not os.path.exists(EVALUATION_BASE_PATH):
     print(
         f"Creating train test base dir at:\n\t{EVALUATION_BASE_PATH}")
     os.makedirs(EVALUATION_BASE_PATH)
+# results
+RESULTS_BASE_SUBDIR = 'results'
+RESULTS_BASE_PATH = os.path.join(
+    BASE_DATA_FOLDER, RESULTS_BASE_SUBDIR)
+if not os.path.exists(RESULTS_BASE_PATH):
+    print(
+        f"Creating results base dir at:\n\t{RESULTS_BASE_PATH}")
+    os.makedirs(RESULTS_BASE_PATH)
 
 
 #TODO needs renaming

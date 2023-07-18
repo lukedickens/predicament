@@ -64,7 +64,8 @@ def iterate_between_subject_cv_partition(**loadargs):
     data_by_participant, config = load_labelled_data(**loadargs)
     config['PARTITION'] = {'type':'between_subject'}
     for fold in between_subject_cv_partition(data_by_participant):
-        tr_dt, tr_lb, ts_dt, ts_lb = fold
+        tr_dt, tr_lb, ts_dt, ts_lb, held_out_ID = fold
+        confid['PARTITION']['held_out_ID'] = held_out_ID
         yield (tr_dt, tr_lb, ts_dt, ts_lb, config)
 
 
