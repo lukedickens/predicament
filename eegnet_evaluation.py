@@ -166,25 +166,40 @@ def grid_search(
 #                run(batch_size, kernel_length, dropout_rate)
 
 
+def create_parser():
+    import argparse
+    description= """
+        Provides runs a series of grid searches on different evaluation data"""
+    parser = argparse.ArgumentParser(
+        description=description,
+        epilog='See git repository readme for more details.')
+
+    parser.add_argument('subdirs', nargs='+', type=str,
+        help='subfolders to run experiments on')
+    return parser
+
+
 if __name__ == '__main__':
 #    subdir = '20230713194411/fold0'
-    subdir = 'dummy'
-    evaluation_data = load_evaluation_data(
-        subdir=subdir)
-    train_inputs, train_labels, valid_inputs, valid_labels = evaluation_data[:4]
-    data_details = evaluation_data[-1]
-    n_channels = data_details['n_channels']
-    n_samples = data_details['n_samples'] 
-    nb_classes = data_details['nb_classes']
-    classes = data_details['classes']
-    #   
-    param_choices = {}
-    param_choices['batch_size'] = [16, 32]
-    param_choices['dropout_rate'] = [0.5, 0.8]
-    param_choices['kernel_length'] = [32, 64, 125]
-    grid_search(
-        train_inputs, train_labels, valid_inputs, valid_labels,
-        epochs=20, param_choices=param_choices,
-        n_channels=n_channels, n_samples=n_samples,
-        nb_classes=nb_classes,
-        subdir=subdir)
+    args = create_parser().parse_args()
+    subdirs = vars(args)['subdirs']
+    for subdir in subdirs:
+        evaluation_data = load_evaluation_data(
+            subdir=subdir)
+        train_inputs, train_labels, valid_inputs, valid_labels = evaluation_data[:4]
+        data_details = evaluation_data[-1]
+        n_channels = data_details['n_channels']
+        n_samples = data_details['n_samples'] 
+        nb_classes = data_details['nb_classes']
+        classes = data_details['classes']
+        #   
+        param_choices = {}
+        param_choices['batch_size'] = [16, 32]
+        param_choices['dropout_rate'] = [0.5, 0.8]
+        param_choices['kernel_length'] = [32, 64, 125]
+        grid_search(
+            train_inputs, train_labels, valid_inputs, valid_labels,
+            epochs=20, param_choices=param_choices,
+            n_channels=n_channels, n_samples=n_samples,
+            nb_classes=nb_classes,
+            subdir=subdir)
