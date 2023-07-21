@@ -7,10 +7,31 @@ ERP_Ray.py is the main scripts for EEGNet model and main-Thin-ResNet.py is the m
 
 # By Luke
 
-It would appear that the first bit of code to be run is the prepare_evaluation_data.py module, which creates a subfolder with train and test data that can then be used with the machine learning methods.
+Make sure that you have the data in an appropriate data folder. I use `./data` where `.` is the repository root. The care home data, should be in a subfolder called `CARE_HOME_DATA` (i.e. in `./data/CARE_HOME_DATA`).
 
-There are two object types which make this possible, Ray.EEG_data.EEG_data_obj (my updated name) and Ray.EEG_details.Event_time_details These almost certainly need better names.
+The first bit of code to be run is the 
 
-To create Ray.EEG_data.EEG_data_obj for all participants, you need to run EEG_data.read_all_VG_files() then you need to create a set of Ray.EEG_details.Event_time_details objects so you can load in the event_details otherwise odd errors appear. See Ray.data_load_save.set_up for this process in summary.
+`python3 prepare_evaluation_data.py`
 
-Once you have the participants bio-sensor data and real world events loaded up, you can create a train test dataset from them with gen_EEG_train_test_to_csv. This does the splitting then saves to csv, but we really want to investigate Ray.data_load_save.gen_EEG_traintest_to_csv_mix next to work out how this data is being split.
+This merges the observational data from the study with the EEG data in the edf files and produces a bunch of folds (hold one group out, where each participant represents a group). It places this in a subfolder of the data folder called `evaluation/<DATETIME>` (e,g, in `./data/evaluation/20230713194411/`). Subfolders of this folder are named `fold<N>` one for each fold.
+
+Then you need to also clone the repository arl-eegmodels (https://github.com/vlawhern/arl-eegmodels) and place this in your `PYTHONPATH`. So, I put this repository in the folder `~/git/external/arl-eegmodels/`, then run the command:
+
+`export PYTHONPATH=~/git/external/arl-eegmodels/:${PYTHONPATH}`
+
+Now you can test this by running `python3` and trying `import EEGModels` (you will need all the dependencies for `arl-eegmodels` too.
+
+Now you can run the grid-search code (as it currently stands) with the command
+
+`python3 eegnet_evaluation.py data/evaluation/20230713194411/fold0`
+
+Which will run the grid search on just the 0th fold.
+
+My aim is instead, to input something like
+
+`python3 eegnet_evaluation.py data/evaluation/20230713194411 data/results/performance.csv`
+
+And for it to a) load all previous performance results from `data/results/performance.csv` associated with all hypterparameter choices of interest, b) sample a new set of hyperparameter choices from a bayesian optimisation module (for the hyperparameters that we are searching), c) run `epoch` epochs of training on the model with those hyperparameter choices on every fold in `data/evaluation/20230713194411`, d) take the average performance over all folds as the performance for those hyperparametter choices (watch out for NaN), e) save the hyperparameter choices and avg performance results to `data/results/performance.csv`.
+
+
+

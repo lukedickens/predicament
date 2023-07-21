@@ -16,6 +16,7 @@ try:
 except:
     print("Have you put arg-eegmodels in the PATHONPATH?")
     raise
+
 from tensorflow.keras import utils as np_utils
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras import backend as K
@@ -119,7 +120,7 @@ def run(
         train_inputs, train_labels, batch_size=batch_size, epochs=epochs,
         verbose = 2, validation_data=(valid_inputs, valid_labels),
         callbacks=[checkpointer], class_weight = class_weights)
-    # save training result
+    #TODO check that this is loading best model
     model.load_weights(tmp_file_path)
     res = pd.DataFrame({
         'acc': model.history.history['accuracy'],
