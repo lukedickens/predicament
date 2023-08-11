@@ -158,6 +158,8 @@ def create_parser():
         '-c', '--channels')
     parser.add_argument(
         '-w', '--window-size', type=int, default=DEFAULT_WINDOW_SIZE)
+    parser.add_argument(
+        '-s', '--window-step', type=int)
     return parser
 
 
