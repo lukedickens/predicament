@@ -31,10 +31,19 @@ from predicament.utils import file_utils
 
 def load_labelled_data(
         participant_list=FULL_PARTICIPANT_LIST,
-        conditions=TARGET_CONDITIONS, channels=DREEM_MINIMAL_CHANNELS,
+        conditions=TARGET_CONDITIONS, channels=None,
+        channel_group=None,
         window_size=DEFAULT_WINDOW_SIZE, window_step=None):
     if window_step is None:
         window_step = DEFAULT_WINDOW_SIZE//8
+    if channels is None:
+        if channel_group is None or channel_group == 'dreem-minimal':
+            channels=DREEM_MINIMAL_CHANNELS
+        elif channel_group == 'dreem-eeg':
+            channels=DREEM_EEG_CHANNELS
+    else:
+        channels = channels.split(',')
+            
     # load data from file
     all_participants_data = create_participant_data_edf_only(
         participant_list=participant_list)
@@ -65,7 +74,7 @@ def iterate_between_subject_cv_partition(**loadargs):
     config['PARTITION'] = {'type':'between_subject'}
     for fold in between_subject_cv_partition(data_by_participant):
         tr_dt, tr_lb, ts_dt, ts_lb, held_out_ID = fold
-        confid['PARTITION']['held_out_ID'] = held_out_ID
+        config['PARTITION']['held_out_ID'] = held_out_ID
         yield (tr_dt, tr_lb, ts_dt, ts_lb, config)
 
 
@@ -97,6 +106,7 @@ def prepare_between_subject_cv_partition_files(**loadargs):
         trn_lab = np.reshape(trn_lab, (-1,1))
         tst_lab = np.reshape(tst_lab, (-1,1))
         # save config file with the 
+        config['PARTITION']['within_or_between'] = 'between'
         config['PARTITION']['fold'] = str(f)
         config['PARTITION']['n_train'] = str(n_train)
         config['PARTITION']['n_test'] = str(n_test)
@@ -117,6 +127,42 @@ def prepare_between_subject_cv_partition_files(**loadargs):
             tst_lab, delimiter=",")
 
 
-if __name__ == '__main__':
-    prepare_between_subject_cv_partition_files()
+def main(within_or_between='between', **kwargs):
+    if within_or_between=='between':
+        prepare_between_subject_cv_partition_files(**kwargs)
+    elif within_or_between=='within':
+        raise NotImplementedError('Within partition not yet implemented')
+        
+def create_parser():
+    import argparse
+    description= """
+        Loads study data, then windows and (typically) partitions it according
+        to the configuration parameters then saves down to file."""
+    parser = argparse.ArgumentParser(
+        description=description,
+        epilog='See git repository readme for more details.')
+    # partition arguments
+    # specify within or between
+    group = parser.add_mutually_exclusive_group()
+    group.set_defaults(within_or_between="between")
+    group.add_argument(
+        '--between', dest='within_or_between',
+        action='store_const', const='between')
+    group.add_argument(
+        '--within', dest='within_or_between',
+        action='store_const', const='within')
+    # other parameters to control loaded data
+    parser.add_argument(
+        '-g', '--channel-group', default='dreem-minimal')
+    parser.add_argument(
+        '-c', '--channels')
+    parser.add_argument(
+        '-w', '--window-size', type=int, default=DEFAULT_WINDOW_SIZE)
+    return parser
 
+
+if __name__ == '__main__':
+    args = create_parser().parse_args()
+    kwargs = vars(args)
+    main(**kwargs)
+    
