@@ -51,4 +51,34 @@ My aim is instead, to input something like
 And for it to a) load all previous performance results from `data/results/performance.csv` associated with all hypterparameter choices of interest, b) sample a new set of hyperparameter choices from a bayesian optimisation module (for the hyperparameters that we are searching), c) run `epoch` epochs of training on the model with those hyperparameter choices on every fold in `data/evaluation/20230713194411`, d) take the average performance over all folds as the performance for those hyperparametter choices (watch out for NaN), e) save the hyperparameter choices and avg performance results to `data/results/performance.csv`.
 
 
+## Featured data and experiments
 
+For these experiments we have to convert time-series windows into feature vectors so they can be processed by conventional machine learning models, such as Random Forests. First we need to load the data to windowed files of a chosen length. For the dreem data (edf format) we use
+
+```python3 prepare_evaluation_data.py --mode windowed -f dreem```
+
+For the E4 data (csv files) we use:
+
+```python3 prepare_evaluation_data.py --mode windowed -f E4```
+
+Either of these calls will generate a data file and config file in an appropriate directory, and normally this is time-stamped. For instance, on 6th Dec 2023 at 19:35, I created folder relative to the pwd of `data/featured/20231206193533`. This corresponds to subdir of `20231206193533`. We can then create features from this, either by using `--subdir 20231206193533` or renaming the subdir on our system and using the new name in the call. I used
+
+```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533```
+
+By default this only produces a subset of the features, referred to as feature-group `stats`. An equivalent call would be 
+
+```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-group stats```
+
+Some features take longer to create than others and you may want to break your processing down into stages. If I call the script with `--mode featured` again then it will augment pre-existing features with any new features, overwriting the pre-existing features with a new copy of identical data (effectively leaving them unchanged). I tried running this:
+
+```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-set arCoeff,Hurst,LyapunovExponent```
+
+and 
+
+```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-set MaxFreqInd,MeanFreq,FreqSkewness,FreqKurtosis```
+
+This extends the pre-existing featured data to include channel-wise features for each of 'arCoeff',  'Hurst', 'LyapunovExponent', 'MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis'. At time of writing, the second call just above is equivalent to 
+
+```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-group freq```
+
+One feature 'Entropy' can take extreme times to compute (>120 hours) and has been omitted until a more efficient approach can be found.python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-set arCoeff,Hurst,LyapunovExponent

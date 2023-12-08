@@ -24,7 +24,7 @@ from tensorflow.keras import backend as K
 from predicament.utils.config import EVALUATION_BASE_PATH
 from predicament.utils.config import RESULTS_BASE_PATH
 
-def load_evaluation_data(
+def load_cross_validation_data(
             subdir = '20230713194411/fold0'):
     #
     # data directory
@@ -170,7 +170,7 @@ def grid_search(
 def create_parser():
     import argparse
     description= """
-        Provides runs a series of grid searches on different evaluation data"""
+        Provides runs a series of grid searches on different cross_validation data"""
     parser = argparse.ArgumentParser(
         description=description,
         epilog='See git repository readme for more details.')
@@ -185,10 +185,10 @@ if __name__ == '__main__':
     args = create_parser().parse_args()
     subdirs = vars(args)['subdirs']
     for subdir in subdirs:
-        evaluation_data = load_evaluation_data(
+        cross_validation_data = load_cross_validation_data(
             subdir=subdir)
-        train_inputs, train_labels, valid_inputs, valid_labels = evaluation_data[:4]
-        data_details = evaluation_data[-1]
+        train_inputs, train_labels, valid_inputs, valid_labels = cross_validation_data[:4]
+        data_details = cross_validation_data[-1]
         n_channels = data_details['n_channels']
         n_samples = data_details['n_samples'] 
         nb_classes = data_details['nb_classes']

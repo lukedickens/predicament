@@ -11,13 +11,29 @@ STUDY_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'CARE_HOME_DATA') +'/'
 EVENT_DETAILS_PATH = os.path.join(STUDY_DATA_FOLDER, './event_details.csv')
 EXP_INFO_PATH = os.path.join(STUDY_DATA_FOLDER, './exp_info.csv')
 
-EVALUATION_BASE_SUBDIR = 'evaluation'
-EVALUATION_BASE_PATH = os.path.join(
-    BASE_DATA_FOLDER, EVALUATION_BASE_SUBDIR)
-if not os.path.exists(EVALUATION_BASE_PATH):
+CROSS_VALIDATION_BASE_SUBDIR = 'cross-validation'
+CROSS_VALIDATION_BASE_PATH = os.path.join(
+    BASE_DATA_FOLDER, CROSS_VALIDATION_BASE_SUBDIR)
+if not os.path.exists(CROSS_VALIDATION_BASE_PATH):
     print(
-        f"Creating train test base dir at:\n\t{EVALUATION_BASE_PATH}")
-    os.makedirs(EVALUATION_BASE_PATH)
+        f"Creating cross-validation data base dir at:\n\t{CROSS_VALIDATION_BASE_PATH}")
+    os.makedirs(CROSS_VALIDATION_BASE_PATH)
+# for windowed data
+WINDOWED_BASE_SUBDIR = 'windowed'
+WINDOWED_BASE_PATH = os.path.join(
+    BASE_DATA_FOLDER, WINDOWED_BASE_SUBDIR)
+if not os.path.exists(WINDOWED_BASE_PATH):
+    print(
+        f"Creating windowed data base dir at:\n\t{WINDOWED_BASE_PATH}")
+    os.makedirs(WINDOWED_BASE_PATH)
+# for feature vector data
+FEATURED_BASE_SUBDIR = 'featured'
+FEATURED_BASE_PATH = os.path.join(
+    BASE_DATA_FOLDER, FEATURED_BASE_SUBDIR)
+if not os.path.exists(FEATURED_BASE_PATH):
+    print(
+        f"Creating featured data base dir at:\n\t{FEATURED_BASE_PATH}")
+    os.makedirs(FEATURED_BASE_PATH)
 # results
 RESULTS_BASE_SUBDIR = 'results'
 RESULTS_BASE_PATH = os.path.join(
@@ -29,7 +45,7 @@ if not os.path.exists(RESULTS_BASE_PATH):
 
 
 #TODO needs renaming
-E4_file_paths = {
+E4_LOCAL_DIRPATHS = {
     'VG_01': r'./VG01/E4_8921_15_44/',
     # 'VG_02': None,
     'VG_03': r'./VG03/E4_9921_12_16/',
@@ -43,6 +59,31 @@ E4_file_paths = {
     'VH_02': r'./VH02/E4_61021_13_59/',
     'VH_03': r'./VH03/E4_11221_11_22/'
 }
+
+E4_FULL_DIRPATHS = {
+    part_ID: os.path.join(STUDY_DATA_FOLDER,local_dirpath)
+        for part_ID, local_dirpath in E4_LOCAL_DIRPATHS.items()     }
+
+
+E4_CSV_FILES = [
+         
+    'TEMP.csv',
+    'EDA.csv',
+    'BVP.csv',
+    'ACC.csv',
+    'IBI.csv',
+    'HR.csv',
+#    'tags.csv', # tags not used in this dataset (see E4 folder file info.txt)
+    ]   
+
+#E4_CHANNELS_TO_CSV_FILES = {
+#        fname.split('.')[0].lower(): fname for fname in E4_CSV_FILES }
+
+#ALL_E4_CHANNELS = [ 
+#        ch for ch, fname in E4_CHANNELS_TO_CSV_FILES.items() ]
+#DEFAULT_E4_CHANNELS = [ 
+#        ch for ch, fname in E4_CHANNELS_TO_CSV_FILES.items() if not fname == 'IBI.csv' ]
+DEFAULT_E4_CHANNELS = ['temp', 'eda', 'bvp', 'acc0', 'acc1', 'acc2', 'hr']
 
 EDF_FILE_SUBPATHS = {
     'VG_01': r'./VG01/8921_15_52.edf',
@@ -113,27 +154,30 @@ DREEM_EEG_CHANNELS = [
 # channels so the following minimal set is suggested
 DREEM_MINIMAL_CHANNELS = [
     'EEG Fpz-O1', 'EEG Fpz-O2', 'EEG Fpz-F7', 'EEG Fpz-F8']
+DREEM_INFORMING_CHANNELS = [
+    'EEG Fpz-O1', 'EEG Fpz-O2', 'EEG Fpz-F7', 'EEG F7-01', 'EEG F8-O2']
 DREEM_CHANNELS_EXCLUDED = [ ch_name for ch_name in ALL_DREEM_CHANNELS_LOOKUP 
     if ch_name not in DREEM_EEG_CHANNELS]
 # not used any more (previously the first 4 characters were removed
 EEG_CHANNEL_SHORTNAMES = {ch_name:ch_name[4:] for ch_name in DREEM_EEG_CHANNELS}
 
-FULL_PARTICIPANT_LIST = list(EDF_FILE_PATHS.keys())
+DREEM_PARTICIPANT_IDS = list(EDF_FILE_PATHS.keys())
 # participants will all valid events in the target set of conditions
 TARGET_CONDITIONS =   [
         "exper_video", "wildlife_video", "familiar_music",
         "tchaikovsky", "family_inter"]
 
     # participant missing exp video, break and family
-E4_participant_ids = list(E4_file_paths.keys())
+E4_PARTICIPANT_IDS = list(E4_LOCAL_DIRPATHS.keys())
 
 # A uniform buffer to eliminate the noise at the start of each event, in seconds (S).
 BUFFER_INTERVAL = 30
 DEFAULT_SAMPLE_RATE = 250 # EEG sample rate in Hz
 # approx 4 seconds at 250 Hz
-DEFAULT_WINDOW_SIZE = 1024
+DEFAULT_DREEM_WINDOW_SIZE = 1024
+DEFAULT_E4_WINDOW_SIZE = 4*64
 # approx 2 second overlap
-DEFAULT_WINDOW_STEP = DEFAULT_WINDOW_SIZE//2
+DEFAULT_WINDOW_OVERLAP_FACTOR = 8
 
 
 
@@ -146,7 +190,7 @@ E4_buffer = BUFFER_INTERVAL
 VG_Hz = DEFAULT_SAMPLE_RATE
 
 VG_file_paths = EDF_FILE_SUBPATHS 
-VG_participant_ids = FULL_PARTICIPANT_LIST
+VG_participant_ids = DREEM_PARTICIPANT_IDS
 
 MOTOR_MOVEMENT_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'EEG-Motor-Movement-Imagery-Dataset') +'/'
 

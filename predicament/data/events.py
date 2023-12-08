@@ -10,7 +10,6 @@ from predicament.utils.config import EEG_CONDITIONS
 
 from predicament.utils.config import EVENT_DETAILS_PATH
 from predicament.utils.config import EXP_INFO_PATH
-from predicament.utils.config import FULL_PARTICIPANT_LIST
 from predicament.utils.config import BUFFER_INTERVAL
 
 class ParticipantEvents(object):
@@ -117,7 +116,7 @@ class ParticipantEvents(object):
         return out
 
 def load_event_info_from_csv(
-        participant_list=FULL_PARTICIPANT_LIST,
+        participant_list,
         exp_info_path=EXP_INFO_PATH, event_details_path=EVENT_DETAILS_PATH,
         verbose=False):
     """
@@ -156,8 +155,8 @@ def build_participant_events_object(partID, event_details_df, exp_info_df):
         return participant_events
 
 
-def load_and_show_event_times():
-    all_participants_events = load_event_info_from_csv()
+def load_and_show_event_times(participant_list):
+    all_participants_events = load_event_info_from_csv(participant_list)
     conditions_of_interest = set([
         "exper_video", "wildlife_video", "familiar_music",
         "tchaikovsky", "break", "family_inter"])
@@ -189,8 +188,8 @@ def load_and_show_event_times():
     print(f"condition_durations = {condition_durations}")
     print(f"condition_avg_durations = {condition_avg_durations}")
     
-def load_and_show_valid_events():
-    all_participants_events = load_event_info_from_csv()
+def load_and_show_valid_events(participant_list):
+    all_participants_events = load_event_info_from_csv(participant_list)
     conditions_of_interest = set([
         "exper_video", "wildlife_video", "familiar_music",
         "tchaikovsky", "break", "family_inter"])

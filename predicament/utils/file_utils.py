@@ -10,7 +10,7 @@ Utility functions
 import random
 import time
 
-from predicament.utils.config import EVALUATION_BASE_PATH
+from predicament.utils.config import CROSS_VALIDATION_BASE_PATH
 
 
 def local2unix(datetime):

@@ -80,6 +80,7 @@ def window_all_participants_data(
     """
     all_windowed_data = {}
     for part_ID, participant_data in all_participants_data.items():
+        print(f"participant {part_ID} has type(participant_data) = {type(participant_data)}")
         participant_windowed_data = {}
         for condition in conditions:
             try:

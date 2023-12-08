@@ -6,15 +6,30 @@ from itertools import combinations
 from math import log
 import scipy.signal # using butter, lfilter
 from scipy.fft import fft, ifft
+# see https://github.com/Mottl/hurst
+from hurst import compute_Hc
+
+
+
 
 from statsmodels.tsa.ar_model import AutoReg # for Auto Regression (arCoeff) features
 
 Feature = StrEnum(
     'Feature',
-    ['Mean', 'SD', 'MAD', 'Max', 'Min', 'SMA', 'Energy', 'IQR', 'Entropy',
-    'arCoeff', 'Correlation', 'MaxFreqInd', 'MeanFreq', 'FreqSkewness',
-    'FreqKurtosis', 'EnergyBands'])
+    ['Mean', 'SD', 'MAD', 'Max', 'Min', 'SMA', 'Energy', 'IQR', 'Correlation',
+    'SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent',
+    'MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) # , 'EnergyBands'])
 Features = set([f for f in Feature])
+MAXIMAL_FEATURE_GROUP = set([str(f) for f in Features])
+STATS_FEATURE_GROUP = set(
+    ['Mean', 'SD', 'MAD', 'Max', 'Min', 'Energy', 'IQR', 'Correlation'])
+# Timings for 2 sec window on Care home data
+# SampleEntropy 120 hours
+# arCoeff 5.5 minutes
+INFO_FEATURE_GROUP = set(
+    ['SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent']) # 'LempelZivEntropy'
+FREQ_FEATURE_GROUP = set(
+    ['MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) #, 'EnergyBands'])
 
 
 #
@@ -53,6 +68,40 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 ## butterworth bandpass filter from stackoverflow
 #
 
+## Lempel-Ziv entropy estimator
+# adapted from:
+# https://stackoverflow.com/questions/46296891/entropy-estimator-based-on-the-lempel-ziv-algorithm-using-python
+import math
+def contains(small, big):
+    try:
+        big.tobytes().index(small.tobytes())//big.itemsize
+        return True
+    except ValueError:
+        return False
+
+def lempel_ziv_entropy(l):
+    """
+    input
+    -----
+    l - a 1d numpy timeseries array 
+    """
+    n = len(l)
+    sum_gamma = 0
+
+    for i in range(1, n):
+        sequence = l[:i]
+
+        for j in range(i+1, n+1):
+            s = l[i:j]
+            if contains(s, sequence) != True:
+                sum_gamma += len(s)
+                break
+
+    ae = 1 / (sum_gamma / n) * math.log(n)
+    return ae
+## End of Lempel-Ziv entropy estimator
+
+
 # just takes the bottom triangular part of the correlations matrix
 def correlations(X):
     return np.array([ e for i,r in enumerate(np.corrcoef(X)) for e in r[i+1:]])
@@ -60,32 +109,46 @@ def correlations(X):
 def convert_timeseries_to_features(
         X, feature_set,
         entropy_window_size=10, entropy_tol=0.6,
-        auto_reg_order=3):
+        auto_reg_order=3,
+        hurst_kind='price', hurst_simplified=True):
     """
     parameters
     ----------
     X - time-series.    Assumes X is 2d np.array CxT, where C is channels and T is time-points 
     feature_set - set of features to use. Can be set of strings or set of Feature enum types.
     """
+    for f in feature_set:
+        if f not in Features:
+            raise ValueError(f"Unrecognised feature {f}")
     C, T = X.shape
     features = np.zeros(0)
-    
+    feature_names = []
     # | mean	|	Mean value |
     if Feature.Mean in feature_set:
-        features = np.concatenate((features, np.mean(X,axis=1)))
+        means = np.mean(X,axis=1)
+        features = np.concatenate((features, means))
+        feature_names += [f'Mean{d}' for d in range(means.size)]
     # | std	|	Standard deviation |
     if Feature.SD in feature_set:    
-        features = np.concatenate((features, np.std(X,axis=1)))
+        sds = np.std(X,axis=1)
+        features = np.concatenate((features, sds))
+        feature_names += [f'SD{d}' for d in range(sds.size)]
     # | mad	|	Median absolute value/deviation |
     if Feature.MAD in feature_set:
+        mads = scipy.stats.median_abs_deviation(X,axis=1)
         features = np.concatenate(
-            [features, scipy.stats.median_abs_deviation(X,axis=1)])
+            [features, mads])
+        feature_names += [f'MAD{d}' for d in range(mads.size)]
     # | max	|	Largest values in array |
     if Feature.Max in feature_set:
-        features = np.concatenate([features, np.max(X,axis=1)])
+        maxes = np.max(X,axis=1)
+        features = np.concatenate([features, maxes])
+        feature_names += [f'Max{d}' for d in range(maxes.size)]
     # | min	|	Smallest value in array |
     if Feature.Min in feature_set:
-        features = np.concatenate([features, np.min(X,axis=1)])
+        mins = np.min(X,axis=1)
+        features = np.concatenate([features, mins])
+        feature_names += [f'Min{d}' for d in range(mins.size)]
     # | sma	|	Signal magnitude area |
     if Feature.SMA in feature_set:
         raise NotImplementedError('Not sure whether this is distinct from MAD')
@@ -94,12 +157,21 @@ def convert_timeseries_to_features(
         # seems similar to median absolute deviation
     # | energy	|	Average sum of the squares |
     if Feature.Energy in feature_set:
-        features = np.concatenate([features, np.mean(X**2,axis=1)])
+        energies = np.mean(X**2,axis=1)
+        features = np.concatenate([features, energies])
+        feature_names += [f'Energy{d}' for d in range(energies.size)]
     # | iqr	|	Interquartile range |
-    if Feature.Energy in feature_set:
-        features = np.concatenate([features, scipy.stats.iqr(X,axis=1)])
+    if Feature.IQR in feature_set:
+        iqrs = scipy.stats.iqr(X,axis=1)
+        features = np.concatenate([features, iqrs])
+        feature_names += [f'IQR{d}' for d in range(iqrs.size)]
+    # | correlation	|	Correlation coefficient |
+    if Feature.Correlation in feature_set:
+        these_correlations = correlations(X)
+        features = np.concatenate([features, these_correlations])
+        feature_names += [f'Correlation{d}' for d in range(these_correlations.size)]
     # | entropy	|	Signal Entropy |
-    if Feature.Entropy in feature_set:
+    if Feature.SampleEntropy in feature_set:
         # assuming sample entropy
         # see: https://academic.oup.com/biomethods/article/4/1/bpz016/5634143
         # see: https://www.mdpi.com/1099-4300/20/10/764
@@ -107,6 +179,7 @@ def convert_timeseries_to_features(
         entropies = [
             sample_entropy(list(ts), entropy_window_size, entropy_tol) for ts in X]
         features = np.concatenate([features, entropies])
+        feature_names += [f'SampleEntropy{d}' for d in range(len(entropies))]
     # | arCoeff	|	Autorregresion coefficients |
     if Feature.arCoeff in feature_set:
         # using code from here:
@@ -117,13 +190,48 @@ def convert_timeseries_to_features(
             mod = AutoReg(X[c,:], auto_reg_order, old_names=False)
             res = mod.fit()
             arCoeffs[:,c] = res.params
-        features = np.concatenate([features, arCoeffs.flatten()])
-        # | correlation	|	Correlation coefficient |
-        features = np.concatenate([features, correlations(X)])
+        arCoeffs = arCoeffs.flatten()
+        features = np.concatenate([features, arCoeffs])
+        feature_names += [f'arCoeff{d}' for d in range(arCoeffs.size)]
+    if Feature.Hurst in feature_set:
+        hurst_vals = [
+            compute_Hc(series, kind=hurst_kind, simplified=hurst_simplified)[:2] 
+                for series in X ]
+        hurst_Hs, hurst_Cs = zip(*hurst_vals)
+        features = np.concatenate([features, hurst_Hs])
+        feature_names += [f'Hurst_H{d}' for d in range(len(hurst_Hs))]
+        features = np.concatenate([features, hurst_Cs])
+        feature_names += [f'Hurst_C{d}' for d in range(len(hurst_Cs))]
+    if Feature.LyapunovExponent in feature_set:
+        # from: https://en.wikipedia.org/wiki/Lyapunov_exponent    
+        # but we consider this channel wise only
+        # a solution for univariate series is found here:
+        # https://stackoverflow.com/questions/37908104/lyapunov-exponent-python-implementation
+        # but this leads to instabilities if the sequence contains duplicates
+        # we follow the advice to remove duplicates and use this recipe:
+        # https://stackoverflow.com/questions/37839928/remove-consecutive-duplicates-in-a-numpy-array
+        # difficult to do without for loop as duplicate removal may lead to 
+        # ragged array
+        lyapunovs = np.empty(C)
+        for c, xchan in enumerate(X):
+            # remove duplicates
+            xchan = xchan[np.insert(np.diff(xchan).astype(np.bool), 0, True)]
+            # calculate exponent
+            lyapunovs[c] = np.mean(np.log(np.abs(np.diff(xchan))))
+        features = np.concatenate([features, lyapunovs])
+        feature_names += [f'LyapunovExponent{d}' for d in range(lyapunovs.size)]
+    if Feature.LempelZivEntropy in feature_set: 
+        # from
+        lempel_ziv_entropies = np.empty(C)
+        for c, xchan in enumerate(X):
+            lempel_ziv_entropies[c] = lempel_ziv_entropy(xchan)
+        features = np.concatenate([features, lempel_ziv_entropies])
+        feature_names += [f'LempelZivEntropy{d}' for d in range(lempel_ziv_entropies.size)]
+    ##
+    # check for non-empty intersection of the sets freq_features and feature_set
     freq_features = set([
         Feature.MaxFreqInd, Feature.MeanFreq, Feature.FreqSkewness,
-        Feature.FreqKurtosis, Feature.EnergyBands])
-    # check for non-empty intersection of the sets
+        Feature.FreqKurtosis]) # ,TODO add Feature.EnergyBands
     #TODO The following frequency calculations are based on intensities
     #TODO as the probability mass estimates. This needs supporting by 
     #TODO literature, or otherwise validating
@@ -142,10 +250,13 @@ def convert_timeseries_to_features(
         #print(f"freqBands = {freqBands}")
         # | maxFreqInd	|	Largest frequency component |
         if Feature.MaxFreqInd in feature_set:
-            features = np.concatenate((features, np.argmax(intensities, axis=1)))
+            max_freq_indices = np.argmax(intensities, axis=1)
+            features = np.concatenate((features, max_freq_indices))
+            feature_names += [f'MaxFreqInd{d}' for d in range(max_freq_indices.size)]
         # | meanFreq	|	Frequency signal weighted average |
         if Feature.MeanFreq in feature_set:
             features = np.concatenate((features,  XFreqMeans.flatten()))
+            feature_names += [f'MeanFreq{d}' for d in range(XFreqMeans.size)]
             #print(f"XmeanFreq = {XmeanFreq}")
             #TODO an alternative mean frequency is to use p=1 (manhattan norm)
             #XmeanFreqAlt = np.sum(freqBands*np.abs(Xfreq),axis=1)/np.sum(np.abs(Xfreq), axis=1)
@@ -173,6 +284,7 @@ def convert_timeseries_to_features(
             XFreqM3 = np.sum(intensities*(freqBands - XFreqMeans)**3,axis=1)/np.sum(intensities, axis=1)
             XFreqSkews = XFreqM3/XFreqM2**(3/2)
             features = np.concatenate((features, XFreqSkews))
+            feature_names += [f'FreqSkewness{d}' for d in range(XFreqSkews.size)]
          # | kurtosis	|	Frequency signal Kurtosis |
         if Feature.FreqKurtosis in feature_set:
             #TODO verify
@@ -183,6 +295,11 @@ def convert_timeseries_to_features(
             XFreqM4 = np.sum(intensities*(freqBands - XFreqMeans)**4,axis=1)/np.sum(intensities, axis=1)
             XFreqKurtoses = XFreqM4/XFreqM2**2
             features = np.concatenate((features, XFreqKurtoses))
+            feature_names += [f'FreqKurtosis{d}' for d in range(XFreqKurtoses.size)]
          # | energyBand	|	Energy of a frequency interval |
+         # TODO: how to do energy bands. May relate to Welch's method see:
+         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html
+         # Information came from guidance on processing EEG signals here:
+         # https://raphaelvallat.com/bandpower.html
          # | angle	|	Angle between two vectors |
-    return features
+    return features, feature_names
