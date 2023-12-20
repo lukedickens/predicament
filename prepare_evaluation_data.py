@@ -303,7 +303,8 @@ def consolidate_windowed_data(
 def prepare_feature_data(
         subdir, windowed_fname='windowed.csv', featured_fname='featured.csv',
         feature_set=None, feature_group=None,
-        entropy_tol=0.6, hurst_kind='random_walk', **kwargs):
+        bits_per=1, lzc_type=None, lzc_imp=None,
+        entropy_tols=None, hurst_kind='random_walk', **kwargs):
     if feature_set is None:
         if feature_group == 'stats':
             feature_set = STATS_FEATURE_GROUP
@@ -345,13 +346,25 @@ def prepare_feature_data(
     label_df = windowed_df[label_cols]
     windowed_timeseries_df = windowed_df[timeseries_cols]
     print(f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    windowed_data = windowed_timeseries_df.to_numpy()
+    windowed_data = windowed_data.reshape((-1,n_channels,window_size))
+    amp_means = np.mean(np.mean(windowed_data, axis=2), axis=0)
+    amp_mins = np.min(np.min(windowed_data, axis=2), axis=0)
+    amp_maxes = np.max(np.max(windowed_data, axis=2), axis=0)
+    if entropy_tols is None:
+        entropy_tols = 0.2*np.mean(np.std(windowed_data
+                , axis=2), axis=0)
+        print(f"inferred entropy_tols = {entropy_tols}")
     features_lol = []
     for index in tqdm(np.arange(len(windowed_df))):
         label_row = label_df.iloc[index].to_list()
         value_row = windowed_timeseries_df.iloc[index].to_numpy()
         X = value_row.reshape((n_channels,-1))
         features, feature_names = convert_timeseries_to_features(
-            X, feature_set, entropy_tol=entropy_tol, hurst_kind=hurst_kind)
+            X, feature_set,
+            amp_means=amp_means, amp_mins=amp_mins, amp_maxes=amp_maxes,
+            bits_per=bits_per, lzc_type=lzc_type, lzc_imp=lzc_imp,
+            entropy_tols=entropy_tols, hurst_kind=hurst_kind)
         features_lol.append(        
                 label_row + list(features))
     all_columns = label_cols + feature_names
@@ -456,6 +469,15 @@ def create_parser():
     parser.add_argument(
         '--feature-set',
         help="""Specify feature types as comma separated string""")
+    parser.add_argument(
+        '--bits-per', default=1, type=int,
+        help="""The number of bits for quantized vectors, for use with Lempel Ziv calculations""")
+    parser.add_argument(
+        '--lzc-type', default='casali',
+        help="""The general algorithm for calculating LempelZiv Complexity""")
+    parser.add_argument(
+        '--lzc-imp', default='flow',
+        help="""The specific implementation of LempelZiv Complexity type""")
     parser.add_argument(
         '-f', '--data-format', default='dreem')
     parser.add_argument(

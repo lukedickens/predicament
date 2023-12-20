@@ -3,12 +3,16 @@ import scipy as sp
 import scipy.stats
 from strenum import StrEnum
 from itertools import combinations
+import math
 from math import log
 import scipy.signal # using butter, lfilter
 from scipy.fft import fft, ifft
 # see https://github.com/Mottl/hurst
 from hurst import compute_Hc
 
+from predicament.measures.lempel_ziv import lempel_ziv_entropy
+from predicament.measures.lempel_ziv import lempel_ziv_casali
+from predicament.measures.lempel_ziv import lempel_ziv_casali_alt
 
 
 
@@ -17,40 +21,128 @@ from statsmodels.tsa.ar_model import AutoReg # for Auto Regression (arCoeff) fea
 Feature = StrEnum(
     'Feature',
     ['Mean', 'SD', 'MAD', 'Max', 'Min', 'SMA', 'Energy', 'IQR', 'Correlation',
-    'SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent',
+    'SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent', 'LempelZivEntropy', 
+    'LempelZivComplexity',
     'MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) # , 'EnergyBands'])
 Features = set([f for f in Feature])
 MAXIMAL_FEATURE_GROUP = set([str(f) for f in Features])
 STATS_FEATURE_GROUP = set(
     ['Mean', 'SD', 'MAD', 'Max', 'Min', 'Energy', 'IQR', 'Correlation'])
-# Timings for 2 sec window on Care home data
-# SampleEntropy 120 hours
+# Timings for 4 sec window on Care home data
+# SampleEntropy 5.5 hours (1.5 secs/it)
+# LempelZivEntropy ?? hours (3.25 secs/it)
+# LempelZivComplexity (flow) ?? hours (3.25 secs/it)
+# LempelZivComplexity (alt) ?? hours (3.25 secs/it)
 # arCoeff 5.5 minutes
 INFO_FEATURE_GROUP = set(
-    ['SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent']) # 'LempelZivEntropy'
+    ['SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent']) # 
 FREQ_FEATURE_GROUP = set(
     ['MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) #, 'EnergyBands'])
 
 
+
+def quantize_timeseries(seq, amp_min, amp_max, bits_per=8, binarize=True):
+    bins = np.linspace(amp_min, amp_max, 2**bits_per+1)
+    if bits_per <= 8:
+        quantized = np.empty(seq.size, dtype=np.uint8)
+    else:
+        raise ValueError(f'Invalid bits per {bits_per}')
+    for i in range(2**bits_per):
+        quantized[(seq >= bins[i]) & (seq < bins[i+1]) ] = i
+    if binarize:
+        unpacked = np.unpackbits(quantized)
+        if bits_per < 8:
+            # by default there are 8 bits per unpacked uint8.
+            # We make this shorter  by removing the big end of each encoding.
+            unpacked =  unpacked.reshape((-1,8))[:,-bits_per:].flatten()
+        return unpacked
+    else:
+        return quantized
+
+
+def quantize_multichannel(X, amp_mins, amp_maxes, bits_per=8, binarize=True):
+    bins = np.linspace(amp_mins, amp_maxes, 2**bits_per+1, axis=1)
+#     print(f"bins = {bins}")
+    if bits_per <= 8:
+        quantized = np.empty(X.shape, dtype=np.uint8)
+    else:
+        raise ValueError(f'Invalid bits per {bits_per}')
+    for i in range(2**bits_per):
+        quantized[(X >= bins[:,i:i+1]) & (X < bins[:,i+1:i+2]) ] = i
+    if binarize:
+        n_channels = quantized.shape[0]
+        unpacked = np.unpackbits(quantized, axis=1)
+        if bits_per < 8:
+            # by default there are 8 bits per packed quantized vector.
+            # We make this shorter
+            unpacked =  unpacked.reshape((n_channels, -1,8))[:,:,-bits_per:].reshape((n_channels, -1))
+        return unpacked
+    else:
+        return quantized
+
+
 #
 ## sample entropy from Wikipedia
-def sample_entropy(timeseries_data:list, window_size:int, r:float):
-    B = get_matches(construct_templates(timeseries_data, window_size), r)
-    A = get_matches(construct_templates(timeseries_data, window_size+1), r)
-    return -log(A/B)
+##def sample_entropy(timeseries_data:list, embed_dim:int, tol:float):
+##    B = get_matches(construct_templates(timeseries_data, embed_dim), tol)
+##    A = get_matches(construct_templates(timeseries_data, embed_dim+1), tol)
+##    return -log(A/B)
 
-def construct_templates(timeseries_data:list, m:int=2):
-    num_windows = len(timeseries_data) - m + 1
-    return [timeseries_data[x:x+m] for x in range(0, num_windows)]
+##def construct_templates(timeseries_data:list, m:int=2):
+##    num_windows = len(timeseries_data) - m + 1
+##    return [timeseries_data[x:x+m] for x in range(0, num_windows)]
 
-def get_matches(templates:list, r:float):
-    return len(list(filter(lambda x: is_match(x[0], x[1], r), combinations(templates, 2))))
+##def get_matches(templates:list, tol:float):
+##    return len(list(filter(lambda x: is_match(x[0], x[1], tol), combinations(templates, 2))))
 
-def is_match(template_1:list, template_2:list, r:float):
-    return all([abs(x - y) < r for (x, y) in zip(template_1, template_2)])
-
+##def is_match(template_1:list, template_2:list, tol:float):
+##    return all([abs(x - y) < tol for (x, y) in zip(template_1, template_2)])
 ## sample entropy from Wikipedia
 #
+
+# rewritten sample entropy using numpy arrays
+def sample_entropy(timeseries_data, embed_dim, tol):
+    templates = construct_templates(timeseries_data, embed_dim)
+    B = get_matches(templates, tol)
+    
+    templates_m1 = construct_templates(timeseries_data, embed_dim + 1)
+    A = get_matches(templates_m1, tol)
+    
+    return -log(A / B)
+
+def construct_templates(timeseries_data, m=2):
+    return np.lib.stride_tricks.sliding_window_view(timeseries_data, (m,))
+
+def get_matches(templates, tol):
+    combs = np.array(list(combinations(templates, 2)))
+    matches = np.sum(np.all(np.abs(combs[:, 0] - combs[:, 1]) < tol, axis=1))
+    return matches
+
+## Faster approach using 2d numpy arrays
+def sample_entropy_stack(timeseries_data, embed_dim, tols):
+    templates = construct_templates_stack(timeseries_data, embed_dim)
+    B = get_matches_stack(templates, tols)
+    
+    templates_m1 = construct_templates_stack(timeseries_data, embed_dim + 1)
+    A = get_matches_stack(templates_m1, tols)
+    
+    return -np.log(A / B)
+
+def construct_templates_stack(timeseries_data, m=2):
+    window_shape = (timeseries_data.shape[0], m)
+    return np.squeeze(np.lib.stride_tricks.sliding_window_view(
+        timeseries_data, window_shape))
+
+def get_matches_stack(templates, tols):
+    num_rows, _, _ = templates.shape
+    indices = np.arange(num_rows)
+    combs = np.array(list(combinations(indices, 2)))
+    matches = np.sum(np.all(
+            np.abs(templates[combs[:, 0]] - templates[combs[:, 1]]) < tols[np.newaxis, :, np.newaxis],
+            axis=2),
+        axis=0)
+    return matches
+    
 
 #
 ## butterworth bandpass filter from stackoverflow
@@ -68,38 +160,6 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 ## butterworth bandpass filter from stackoverflow
 #
 
-## Lempel-Ziv entropy estimator
-# adapted from:
-# https://stackoverflow.com/questions/46296891/entropy-estimator-based-on-the-lempel-ziv-algorithm-using-python
-import math
-def contains(small, big):
-    try:
-        big.tobytes().index(small.tobytes())//big.itemsize
-        return True
-    except ValueError:
-        return False
-
-def lempel_ziv_entropy(l):
-    """
-    input
-    -----
-    l - a 1d numpy timeseries array 
-    """
-    n = len(l)
-    sum_gamma = 0
-
-    for i in range(1, n):
-        sequence = l[:i]
-
-        for j in range(i+1, n+1):
-            s = l[i:j]
-            if contains(s, sequence) != True:
-                sum_gamma += len(s)
-                break
-
-    ae = 1 / (sum_gamma / n) * math.log(n)
-    return ae
-## End of Lempel-Ziv entropy estimator
 
 
 # just takes the bottom triangular part of the correlations matrix
@@ -108,14 +168,16 @@ def correlations(X):
     
 def convert_timeseries_to_features(
         X, feature_set,
-        entropy_window_size=10, entropy_tol=0.6,
-        auto_reg_order=3,
+        entropy_embed_dim=2, entropy_tol=None, entropy_tols=None,
+        auto_reg_order=3, bits_per=1, lzc_type=None, lzc_imp=None,
+        amp_means=None, amp_maxes=None, amp_mins=None,
         hurst_kind='price', hurst_simplified=True):
     """
     parameters
     ----------
     X - time-series.    Assumes X is 2d np.array CxT, where C is channels and T is time-points 
     feature_set - set of features to use. Can be set of strings or set of Feature enum types.
+    bits_per - when quantizing the data for LempelZiv calculations, we set how many bits to encode each per channel sample. 
     """
     for f in feature_set:
         if f not in Features:
@@ -176,10 +238,13 @@ def convert_timeseries_to_features(
         # see: https://academic.oup.com/biomethods/article/4/1/bpz016/5634143
         # see: https://www.mdpi.com/1099-4300/20/10/764
         # entropy_tol guidance is to use 0.05*(np.mean(np.std(X,axis=1)))
-        entropies = [
-            sample_entropy(list(ts), entropy_window_size, entropy_tol) for ts in X]
+        if entropy_tols is None:
+            entropy_tols = np.ones(X.shape[0])*entropy_tol            
+##        entropies = [
+##            sample_entropy(list(ts), entropy_embed_dim, e_tol) for e_tol, ts in zip(entropy_tols,X)]
+        entropies = sample_entropy_stack(X, entropy_embed_dim, entropy_tols)
         features = np.concatenate([features, entropies])
-        feature_names += [f'SampleEntropy{d}' for d in range(len(entropies))]
+        feature_names += [f'SampleEntropy[m={entropy_embed_dim}][{d}]' for d in range(len(entropies))]
     # | arCoeff	|	Autorregresion coefficients |
     if Feature.arCoeff in feature_set:
         # using code from here:
@@ -220,13 +285,31 @@ def convert_timeseries_to_features(
             lyapunovs[c] = np.mean(np.log(np.abs(np.diff(xchan))))
         features = np.concatenate([features, lyapunovs])
         feature_names += [f'LyapunovExponent{d}' for d in range(lyapunovs.size)]
+    Q = None
     if Feature.LempelZivEntropy in feature_set: 
         # from
+        Q = quantize_multichannel(
+            X, amp_mins, amp_maxes, bits_per=bits_per, binarize=True)
         lempel_ziv_entropies = np.empty(C)
-        for c, xchan in enumerate(X):
-            lempel_ziv_entropies[c] = lempel_ziv_entropy(xchan)
+        for c, ts in enumerate(Q):
+            lempel_ziv_entropies[c] = lempel_ziv_entropy(ts)
         features = np.concatenate([features, lempel_ziv_entropies])
-        feature_names += [f'LempelZivEntropy{d}' for d in range(lempel_ziv_entropies.size)]
+        feature_names += [f'LempelZivEntropy[b={bits_per}][{d}]' for d in range(lempel_ziv_entropies.size)]
+    if Feature.LempelZivComplexity in feature_set: 
+        if Q is None:
+            Q = quantize_multichannel(
+                X, amp_mins, amp_maxes, bits_per=bits_per, binarize=True)
+#        quantized = quantize_data(X)
+        if lzc_type == 'casali': 
+            if lzc_imp == 'flow':
+                lzc = lempel_ziv_casali(Q.T)
+                feature_names += [f'LempelZivComplexity[b={bits_per}]' ] 
+            elif lzc_imp == 'alt':
+                lzc = lempel_ziv_casali_alt(Q.T)
+                feature_names += [f'LempelZivComplexityAlt[b={bits_per}]' ] 
+            features = np.concatenate([features, [lzc]])
+        else:
+            raise ValueError(f'Unrecognised LempelZivComplexity type {lzc_type}')
     ##
     # check for non-empty intersection of the sets freq_features and feature_set
     freq_features = set([
