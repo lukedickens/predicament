@@ -17,13 +17,13 @@ from Ray.Event_details import Event_time_details
 #EEG_channels = {1:"EEG Fpz-O1", 2:"EEG Fpz-O2", 3:"EEG Fpz-F7", 4:"EEG F8-F7", 5:"EEG F7-01", 6:"EEG F8-O2", 7:"EEG Fpz-F8"}
 
 class EEG_data_obj(object):
-    def __init__(self, part_ID, data, data_channel_names, include_channels=DREEM_EEG_CHANNELS) -> None:
+    def __init__(self, participant, data, data_channel_names, include_channels=DREEM_EEG_CHANNELS) -> None:
         channel_lookup = {ch_name:i for i, ch_name in enumerate(data_channel_names)}
         print(f"include_channels={include_channels}")
         print(f"type(data) = {type(data)}")
         print(f"data.shape = {data.shape}")
         # participant ID
-        self.ID = part_ID
+        self.ID = participant
         # each channel uses the short name and is loaded from the full data object
 #        self.EEG_data = {
 #            ch_name: data[channel_lookup[ch_name]] \
@@ -87,9 +87,9 @@ class EEG_data_obj(object):
         return output
 
 def read_all_VG_files() -> Dict[str, EEG_data_obj]:
-    return {part_ID: read_VG_file(part_ID) for part_ID in VG_file_paths.keys()}
+    return {participant: read_VG_file(participant) for participant in VG_file_paths.keys()}
 
-def read_VG_file(part_ID, exclude_channels=None, include_channels=None) -> EEG_data_obj:
+def read_VG_file(participant, exclude_channels=None, include_channels=None) -> EEG_data_obj:
     """
     global variables
     ----------------
@@ -97,16 +97,16 @@ def read_VG_file(part_ID, exclude_channels=None, include_channels=None) -> EEG_d
     
     parameters
     ----------
-    part_ID - participant ID
+    participant - participant ID
     exclude_channels - channels to exclude from loading in from mne object.
     """
     try:
-        if part_ID not in VG_file_paths.keys():
-            raise IndexError("The given part_ID ({}) is not included".format(part_ID))
+        if participant not in VG_file_paths.keys():
+            raise IndexError("The given participant ({}) is not included".format(participant))
     except RuntimeError as e:
         print("Error:", e)
     print(f"STUDY_DATA_FOLDER = {STUDY_DATA_FOLDER}")
-    VG_file_path = os.path.join(STUDY_DATA_FOLDER, VG_file_paths[part_ID])
+    VG_file_path = os.path.join(STUDY_DATA_FOLDER, VG_file_paths[participant])
     print(f"VG_file_path = {VG_file_path}")
     if not exclude_channels is None:
         VG_file = mne.io.read_raw_edf(VG_file_path, exclude=exclude_channels)
@@ -116,18 +116,18 @@ def read_VG_file(part_ID, exclude_channels=None, include_channels=None) -> EEG_d
     print(f"VG_file.ch_names = {VG_file.ch_names}")
     if not include_channels is None:
         data = EEG_data_obj(
-            part_ID, data_channels, data_channel_names, include_channels=include_channels)
-    data = EEG_data_obj(part_ID, data_channels, data_channel_names)
+            participant, data_channels, data_channel_names, include_channels=include_channels)
+    data = EEG_data_obj(participant, data_channels, data_channel_names)
     # print(VG_file.ch_names)
-    print("Successfully loaded {} VG file (EEG data).".format(part_ID))
+    print("Successfully loaded {} VG file (EEG data).".format(participant))
     return data
 
 def read_all_VG_to_Raw():
-    return {part_ID: read_VG_to_Raw(part_ID) for part_ID in VG_file_paths.keys()}
+    return {participant: read_VG_to_Raw(participant) for participant in VG_file_paths.keys()}
 
-def read_VG_to_Raw(part_ID, exclude_channels=None):
+def read_VG_to_Raw(participant, exclude_channels=None):
     if exclude_channels is None:
         exclude_channels = ['Accelero Norm', 'Positiongram', 'PulseOxy Infrare', 'PulseOxy Red Hea', 'Respiration x', 'Respiration y', 'Respiration z']
-    VG_file_path = os.path.join(STUDY_DATA_FOLDER, VG_file_paths[part_ID])
+    VG_file_path = os.path.join(STUDY_DATA_FOLDER, VG_file_paths[participant])
     raw = mne.io.read_raw_edf(VG_file_path, exclude=exclude_channels, preload = True)
     return raw

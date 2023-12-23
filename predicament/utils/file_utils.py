@@ -9,6 +9,8 @@ Utility functions
 
 import random
 import time
+import os
+import pandas as pd
 
 from predicament.utils.config import CROSS_VALIDATION_BASE_PATH
 
@@ -65,6 +67,45 @@ def _test_unix2local():
     
 def get_evaluation_datadir(n_classes, func):
     data_folder = os.path.join(MOTOR_MOVEMENT_DATA_FOLDER, './Ray/{}classes_{}/'.format(n_classes, func))
+
+def write_dataframe_and_config(
+        dir_path, data, config, data_fname, config_fname='details.cfg'):
+    data_path = os.path.join(dir_path, data_fname)
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    print(f"writing data to {data_path}")
+    # write with progress bar https://stackoverflow.com/questions/64695352/pandas-to-csv-progress-bar-with-tqdm 
+    data.to_csv(data_path)
+##    chunk_indices = np.linspace(0,len(data), 101)
+##    chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
+##    for i, (start, end) in enumerate(tqdm(chunk_slices)):
+##        if i == 0: # first row
+##            data.loc[start:end].to_csv(data_path, mode='w', index=True)
+##        else:
+##            data.loc[start:end].to_csv(data_path, header=None, mode='a', index=True)
+#    chunks = np.array_split(data.index, 100) # split into 100 chunks
+#    for i, chunk in enumerate(tqdm(chunks)):
+#        if i == 0: # first row
+#            data.loc[chunk].to_csv(data_path, mode='w', index=True)
+#        else:
+#            data.loc[chunk].to_csv(data_path, header=None, mode='a', index=True)
+
+    config_path = os.path.join(dir_path, config_fname)
+    print(f"writing config to {config_path}")
+    with open(config_path, 'w') as config_file:
+        config.write(config_file)
+
+def load_dataframe_and_config(
+        dir_path, data_fname, config_fname='details.cfg', **readargs):
+#    print(f"dir_path = {dir_path}")
+#    print(f"data_fname = {data_fname}")
+    data_path = os.path.join(dir_path, data_fname)
+    data = pd.read_csv(data_path, index_col=0,  **readargs)
+    config_path = os.path.join(dir_path, config_fname)
+    config = configparser.ConfigParser()
+    with open(config_path, 'r') as config_file:
+        config.read_file(config_file)
+    return data, config
 
 
 # _test_local2unix()

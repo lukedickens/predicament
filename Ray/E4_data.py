@@ -15,8 +15,8 @@ from Ray.Event_details import Event_time_details
 E4_file_names = ['ACC', 'BVP', 'EDA', 'HR', 'IBI', 'TEMP'] # physiological data, tags.csv not included
 
 class E4_data_class(object):
-    def __init__(self, part_ID, data) -> None:
-        self.ID = part_ID
+    def __init__(self, participant, data) -> None:
+        self.ID = participant
         self.E4_data = data # each file including: start_time, Hz, data
         self.event_details = None # need to be set after init
 
@@ -36,24 +36,24 @@ class E4_data_class(object):
 
 
 def read_all_E4_files() -> Dict[str, E4_data_class]:
-    return {part_ID: read_E4_file(part_ID) for part_ID in E4_LOCAL_DIRPATHS.keys()}
+    return {participant: read_E4_file(participant) for participant in E4_LOCAL_DIRPATHS.keys()}
 
-def read_E4_file(part_ID) -> E4_data_class:
+def read_E4_file(participant) -> E4_data_class:
     try:
-        if part_ID not in E4_LOCAL_DIRPATHS.keys():
-            raise IndexError("The given part_ID ({}) is not included".format(part_ID))
+        if participant not in E4_LOCAL_DIRPATHS.keys():
+            raise IndexError("The given participant ({}) is not included".format(participant))
     except RuntimeError as e:
         print("Error:", e)
     data = {}
     for file_name in E4_file_names:
-        E4_file_path = os.path.join(STUDY_DATA_FOLDER, E4_LOCAL_DIRPATHS[part_ID], file_name + '.csv')
+        E4_file_path = os.path.join(STUDY_DATA_FOLDER, E4_LOCAL_DIRPATHS[participant], file_name + '.csv')
         E4_file = pd.read_csv(E4_file_path)
         data[file_name] = {
             'time': E4_file.columns[0],
             'Hz': E4_file.iloc[0,0], # The first row is the sample rate expressed in Hz.
             'data': E4_file[1:].reset_index(drop = True)
         }
-    E4_part_data = E4_data_class(part_ID, data)
-    print("Successfully loaded {} E4 file (physiological data)".format(part_ID))
+    E4_part_data = E4_data_class(participant, data)
+    print("Successfully loaded {} E4 file (physiological data)".format(participant))
     return E4_part_data
     

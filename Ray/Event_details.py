@@ -28,9 +28,9 @@ all_EEG_events = {
 }
 
 class Event_time_details(object):
-    def __init__(self, part_ID) -> None:
+    def __init__(self, participant) -> None:
         # Note: self.exp_start_time is for EEG file, since different E4 files have different start_timestamp
-        self.ID = part_ID
+        self.ID = participant
         self.events_info = {} # with the actual event name and its start and end time (without buffer)
         self.exp_date = None # need to be set after init
         self.exp_start_time = None # need to be set after init

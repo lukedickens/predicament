@@ -74,7 +74,7 @@ def subsample_proposed_group_label_counts(
     return new_df
     
     
-def balance_data(df, group_col='part_ID', label_col='condition'):
+def balance_data(df, group_col='participant', label_col='condition'):
     # balancing the data
     proposed_group_label_counts = propose_balanced_group_label_counts(
         df, group_col, label_col)

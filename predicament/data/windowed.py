@@ -21,7 +21,7 @@ def merge_condition_data(nested_data):
     label_mapping : a list mapping ids to conditions.
     """
     conditions = set()
-    for part_ID, part_data in nested_data.items():
+    for participant, part_data in nested_data.items():
         conditions |= set(part_data.keys())
     label_mapping = list(conditions)
 #    print(f"label_mapping = {label_mapping}")
@@ -30,8 +30,8 @@ def merge_condition_data(nested_data):
     reverse_label_mapping = {c:i for i, c in enumerate(label_mapping)}
     # merged data
     merged_data = {}
-    for part_ID, part_data in nested_data.items():
-        #print(f"part_ID = {part_ID}")
+    for participant, part_data in nested_data.items():
+        #print(f"participant = {participant}")
         collected_data = []
         collected_labels = []
         for condition, pc_data in part_data.items():
@@ -41,7 +41,7 @@ def merge_condition_data(nested_data):
             collected_labels.append(label*np.ones(n_datapoints))
         stacked_data = np.vstack(collected_data)
         stacked_labels = np.concatenate(collected_labels)
-        merged_data[part_ID] = (stacked_data, stacked_labels)
+        merged_data[participant] = (stacked_data, stacked_labels)
 #        print(f"stacked_data.shape = {stacked_data.shape}")
 #        print(f"stacked_labels.shape = {stacked_labels.shape}")
     return merged_data, label_mapping
@@ -79,8 +79,8 @@ def window_all_participants_data(
         be removed from the dictionary.
     """
     all_windowed_data = {}
-    for part_ID, participant_data in all_participants_data.items():
-        print(f"participant {part_ID} has type(participant_data) = {type(participant_data)}")
+    for participant, participant_data in all_participants_data.items():
+        print(f"participant {participant} has type(participant_data) = {type(participant_data)}")
         participant_windowed_data = {}
         for condition in conditions:
             try:
@@ -95,7 +95,7 @@ def window_all_participants_data(
                 if condition_fragile:
                     raise
         if len(participant_windowed_data) > 0:
-            all_windowed_data[part_ID] = participant_windowed_data
+            all_windowed_data[participant] = participant_windowed_data
     return all_windowed_data
 
 
@@ -117,9 +117,9 @@ def testing_window_all_participants_data():
             all_participants_data, conditions, channels, window_size, window_step,
             condition_fragile=False, channel_fragile=False, copy=False)
     row_counts = {}
-    for part_ID, window_data_p in all_windowed_data.items():
+    for participant, window_data_p in all_windowed_data.items():
         for condition, window_data_pc in window_data_p.items():
-            print(f"{part_ID}-{condition}: {window_data_pc.shape[0]}x{window_data_pc.shape[1]}")
+            print(f"{participant}-{condition}: {window_data_pc.shape[0]}x{window_data_pc.shape[1]}")
             row_count = row_counts.get(condition,0)
             row_counts[condition] = row_count + window_data_pc.shape[0]
     print(f"row counts per condition = {row_counts}")

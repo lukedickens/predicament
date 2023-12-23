@@ -19,9 +19,9 @@ class ParticipantEvents(object):
     as the overall start time. This can be used to appropriately reference 
     timeseries data which is associated with these events.
     """
-    def __init__(self, part_ID, buffer_interval=BUFFER_INTERVAL) -> None:
+    def __init__(self, participant, buffer_interval=BUFFER_INTERVAL) -> None:
         # Note: self.exp_start_time is for EEG file, since different E4 files have different start_timestamp
-        self.ID = part_ID
+        self.ID = participant
         self.events_info = {} # with the actual event name and its start and end time (without buffer)
         self.exp_date = None # need to be set after init
         self.exp_start_time = None # need to be set after init
@@ -167,13 +167,13 @@ def load_and_show_event_times(participant_list):
         condition_duration = 0
         condition_count = 0
         print(f"Condition: {condition}")
-        for part_ID, participant_events in all_participants_events.items():
+        for participant, participant_events in all_participants_events.items():
             try:
                 start, end = participant_events.get_event_studytimes(condition)
                 duration = participant_events.get_event_duration(condition)
                 condition_duration += duration
                 condition_count += 1
-                print(f"{part_ID}: {start} -- {end} [{duration} secs]")
+                print(f"{participant}: {start} -- {end} [{duration} secs]")
             except KeyError:
                 pass
             except ValueError:
@@ -197,13 +197,13 @@ def load_and_show_valid_events(participant_list):
 #        "exper_video", "wildlife_video", "familiar_music",
 #        "tchaikovsky", "family_inter"])
 ##    all_good = []
-##    for part_ID, participant_events in all_participants_events.items():
+##    for participant, participant_events in all_participants_events.items():
 ##        these_conditions = participant_events.get_good_conditions()
-##        print(f"{part_ID}: {these_conditions}")
+##        print(f"{participant}: {these_conditions}")
 ##        if not these_conditions.issuperset(conditions_of_interest):
 ##            print(f"\tmissing: {conditions_of_interest.difference(these_conditions)}")
 ##        else:
-##            all_good.append(part_ID)
+##            all_good.append(participant)
 ##    print(f"all_good = {all_good}")
     raise NotImplementedError('Yet')
     

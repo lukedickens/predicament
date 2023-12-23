@@ -61,8 +61,8 @@ E4_LOCAL_DIRPATHS = {
 }
 
 E4_FULL_DIRPATHS = {
-    part_ID: os.path.join(STUDY_DATA_FOLDER,local_dirpath)
-        for part_ID, local_dirpath in E4_LOCAL_DIRPATHS.items()     }
+    participant: os.path.join(STUDY_DATA_FOLDER,local_dirpath)
+        for participant, local_dirpath in E4_LOCAL_DIRPATHS.items()     }
 
 
 E4_CSV_FILES = [
@@ -101,8 +101,8 @@ EDF_FILE_SUBPATHS = {
 }
 
 EDF_FILE_PATHS = {
-    part_ID : os.path.join(STUDY_DATA_FOLDER, subpath) \
-        for part_ID, subpath in EDF_FILE_SUBPATHS.items()}
+    participant : os.path.join(STUDY_DATA_FOLDER, subpath) \
+        for participant, subpath in EDF_FILE_SUBPATHS.items()}
 
 ## get the channel id from the channel name
 ALL_DREEM_CHANNELS = [ # 1&5, 2&6, 3&4 similar, EEG data (1-7)

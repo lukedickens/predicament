@@ -35,8 +35,8 @@ class ParticipantData(object):
     Data must correspond to contemporaneously recorded samples whose local
     time index and sample rate aligns with the event information.
     """
-    def __init__(self, part_ID, event_details, sample_rate):
-        self.ID = part_ID
+    def __init__(self, participant, event_details, sample_rate):
+        self.ID = participant
         self.timeseries = {}
         self.event_details = event_details
         self.sample_rate = sample_rate
@@ -142,21 +142,21 @@ def init_participants_data(
         all_participants_events,
         sample_rate=DEFAULT_SAMPLE_RATE):
     all_participants_data = {}
-    for part_ID in all_participants_events.keys():
-        event_details = all_participants_events[part_ID]
-        participant_data = ParticipantData(part_ID, event_details, sample_rate)  
-        all_participants_data[part_ID] = participant_data       
+    for participant in all_participants_events.keys():
+        event_details = all_participants_events[participant]
+        participant_data = ParticipantData(participant, event_details, sample_rate)  
+        all_participants_data[participant] = participant_data       
     return all_participants_data
 
 def read_all_participants_edf_files(
         all_participants_data, edf_file_paths, 
         sample_rate=DEFAULT_SAMPLE_RATE):
-    for part_ID in all_participants_data.keys():
-        print(f"adding {part_ID}")
-        edf_file_path = edf_file_paths[part_ID]
+    for participant in all_participants_data.keys():
+        print(f"adding {participant}")
+        edf_file_path = edf_file_paths[participant]
         print(f"\tfrom {edf_file_path}")
-        participant_data = all_participants_data[part_ID]
-        all_participants_data[part_ID] = read_edf_file_to_participant_data(
+        participant_data = all_participants_data[participant]
+        all_participants_data[participant] = read_edf_file_to_participant_data(
             participant_data, edf_file_path, sample_rate)
     return all_participants_data
 
@@ -167,7 +167,7 @@ def read_edf_file_to_participant_data(
     
     parameters
     ----------
-    part_ID - participant ID
+    participant - participant ID
     exclude_channels - channels to exclude from loading in from mne object.
     """
 #    print(f"edf_file_path = {edf_file_path}")
@@ -318,10 +318,10 @@ def read_E4_csv_data_to_participant_data(
 def read_all_participants_E4_csv_data(
         all_participants_data, full_dirpaths, csv_files):
     keys = list(all_participants_data.keys())
-    for part_ID in tqdm(keys):
-        full_dirpath = full_dirpaths[part_ID]
-        participant_data = all_participants_data[part_ID]
-        all_participants_data[part_ID] = read_E4_csv_data_to_participant_data(
+    for participant in tqdm(keys):
+        full_dirpath = full_dirpaths[participant]
+        participant_data = all_participants_data[participant]
+        all_participants_data[participant] = read_E4_csv_data_to_participant_data(
             participant_data, full_dirpath, csv_files)
     return all_participants_data
 

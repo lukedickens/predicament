@@ -60,44 +60,31 @@ def get_parent_path(datatype, subdir):
         os.makedirs(parent_path)
     return parent_path
 
-def write_dataframe_and_config(
-        dir_path, data, config, data_fname, config_fname='details.cfg'):
-    data_path = os.path.join(dir_path, data_fname)
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-    print(f"writing data to {data_path}")
-    # write with progress bar https://stackoverflow.com/questions/64695352/pandas-to-csv-progress-bar-with-tqdm 
-    data.to_csv(data_path)
-##    chunk_indices = np.linspace(0,len(data), 101)
-##    chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
-##    for i, (start, end) in enumerate(tqdm(chunk_slices)):
-##        if i == 0: # first row
-##            data.loc[start:end].to_csv(data_path, mode='w', index=True)
-##        else:
-##            data.loc[start:end].to_csv(data_path, header=None, mode='a', index=True)
-#    chunks = np.array_split(data.index, 100) # split into 100 chunks
-#    for i, chunk in enumerate(tqdm(chunks)):
-#        if i == 0: # first row
-#            data.loc[chunk].to_csv(data_path, mode='w', index=True)
-#        else:
-#            data.loc[chunk].to_csv(data_path, header=None, mode='a', index=True)
+### Moved to utils
+##def write_dataframe_and_config(
+##        dir_path, data, config, data_fname, config_fname='details.cfg'):
+##    data_path = os.path.join(dir_path, data_fname)
+##    if not os.path.exists(dir_path):
+##        os.makedirs(dir_path)
+##    print(f"writing data to {data_path}")
+##    # write with progress bar https://stackoverflow.com/questions/64695352/pandas-to-csv-progress-bar-with-tqdm 
+##    data.to_csv(data_path)
+##    config_path = os.path.join(dir_path, config_fname)
+##    print(f"writing config to {config_path}")
+##    with open(config_path, 'w') as config_file:
+##        config.write(config_file)
 
-    config_path = os.path.join(dir_path, config_fname)
-    print(f"writing config to {config_path}")
-    with open(config_path, 'w') as config_file:
-        config.write(config_file)
-
-def load_dataframe_and_config(
-        dir_path, data_fname, config_fname='details.cfg', **readargs):
-#    print(f"dir_path = {dir_path}")
-#    print(f"data_fname = {data_fname}")
-    data_path = os.path.join(dir_path, data_fname)
-    data = pd.read_csv(data_path, index_col=0,  **readargs)
-    config_path = os.path.join(dir_path, config_fname)
-    config = configparser.ConfigParser()
-    with open(config_path, 'r') as config_file:
-        config.read_file(config_file)
-    return data, config
+##def load_dataframe_and_config(
+##        dir_path, data_fname, config_fname='details.cfg', **readargs):
+###    print(f"dir_path = {dir_path}")
+###    print(f"data_fname = {data_fname}")
+##    data_path = os.path.join(dir_path, data_fname)
+##    data = pd.read_csv(data_path, index_col=0,  **readargs)
+##    config_path = os.path.join(dir_path, config_fname)
+##    config = configparser.ConfigParser()
+##    with open(config_path, 'r') as config_file:
+##        config.read_file(config_file)
+##    return data, config
 
 
 def resolve_participant_data_settings(
@@ -263,14 +250,14 @@ def consolidate_windowed_data(
     print(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     print(f"Creating consolidated list-of-lists of windowed data:")
     timeseries_lol = []
-    for part_ID, (part_data, part_conditions) in tqdm(data_by_participant.items(), total=len(data_by_participant)):
-#        print(f"For {part_ID} have data:\t{part_data}")
+    for participant, (part_data, part_conditions) in tqdm(data_by_participant.items(), total=len(data_by_participant)):
+#        print(f"For {participant} have data:\t{part_data}")
 #        print(f"With conditions:\t{part_conditions}")
         part_conditions = part_conditions.astype(int)
         last_condition = part_conditions[0]
         index = 0
         for row, condition in zip(part_data, part_conditions):
-            timeseries_lol.append([part_ID, condition, index] + list(row))
+            timeseries_lol.append([participant, condition, index] + list(row))
             if (condition != last_condition):
                 index += window_size
             else:
@@ -278,7 +265,7 @@ def consolidate_windowed_data(
     #
     print(f"Constructing dataframe...")
     timepoints = np.arange(row.size//n_channels)
-    label_cols = ['part_ID', 'condition', 'start time']
+    label_cols = ['participant', 'condition', 'start time']
     columns = label_cols + [ ch+f'[{t}]' for ch in channels for t in timepoints]
     #timeseries_df = pd.DataFrame(timeseries_lol, columns=columns)
     #timeseries_lol_chunks = np.array_split(timeseries_lol, 100)
@@ -294,7 +281,7 @@ def consolidate_windowed_data(
     # save down to file.
     windowed_dir_path = os.path.join(parent_path, subdir)
     config['WINDOWED'] = {}
-    config['WINDOWED']['group_col'] = 'part_ID'
+    config['WINDOWED']['group_col'] = 'participant'
     config['WINDOWED']['target_col'] = 'condition'
     config['WINDOWED']['label_cols'] = str(label_cols).replace("'",'"')
     write_dataframe_and_config(

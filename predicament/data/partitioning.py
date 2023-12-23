@@ -23,9 +23,9 @@ def between_subject_cv_partition(labelled_data_by_participant):
     #
     participants = list(labelled_data_by_participant.keys())
     for held_out_ID in participants:
-        merge_keys = [ part_ID \
-            for part_ID in participants \
-                if part_ID != held_out_ID]
+        merge_keys = [ participant \
+            for participant in participants \
+                if participant != held_out_ID]
         train_data, train_labels = merge_labelled_data_by_key(
             labelled_data_by_participant, merge_keys=merge_keys)
         test_data, test_labels = labelled_data_by_participant[held_out_ID]
