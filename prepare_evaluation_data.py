@@ -17,6 +17,8 @@ from tqdm import tqdm
 import copy
 
 # import data_setup
+from predicament.utils.file_utils import load_dataframe_and_config
+from predicament.utils.file_utils import write_dataframe_and_config
 from predicament.utils.config import DREEM_EEG_CHANNELS, DREEM_MINIMAL_CHANNELS
 from predicament.utils.config import DREEM_INFORMING_CHANNELS
 from predicament.utils.config import TARGET_CONDITIONS
@@ -39,6 +41,7 @@ from predicament.data.features import MAXIMAL_FEATURE_GROUP
 from predicament.data.features import STATS_FEATURE_GROUP
 from predicament.data.features import INFO_FEATURE_GROUP
 from predicament.data.features import FREQ_FEATURE_GROUP
+from predicament.data.features import SUPPORTED_FEATURE_GROUP
 from predicament.data.features import convert_timeseries_to_features
 
 from predicament.utils import file_utils
@@ -299,6 +302,8 @@ def prepare_feature_data(
             feature_set = INFO_FEATURE_GROUP
         elif feature_group == 'freq':
             feature_set = FREQ_FEATURE_GROUP
+        elif feature_group == 'supported':
+            feature_set = SUPPORTED_FEATURE_GROUP
         else:
             raise ValueError(f'Unrecognised feature group {feature_group}')
     else:
@@ -451,7 +456,7 @@ def create_parser():
         '--subdir',
         help="""Data subdirectory to use. TYpically a datetime string""")
     parser.add_argument(
-        '--feature-group', default='stats',
+        '--feature-group', default='supported',
         help="""Predefined group of features to use""")
     parser.add_argument(
         '--feature-set',

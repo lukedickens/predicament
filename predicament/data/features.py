@@ -35,10 +35,10 @@ STATS_FEATURE_GROUP = set(
 # LempelZivComplexity (alt) ?? hours (3.25 secs/it)
 # arCoeff 5.5 minutes
 INFO_FEATURE_GROUP = set(
-    ['SampleEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent']) # 
+    ['LempelZivEntropy', 'arCoeff',  'Hurst', 'LyapunovExponent']) # 
 FREQ_FEATURE_GROUP = set(
     ['MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) #, 'EnergyBands'])
-
+SUPPORTED_FEATURE_GROUP = set(list(STATS_FEATURE_GROUP)+list(INFO_FEATURE_GROUP)+list(FREQ_FEATURE_GROUP))
 
 
 def quantize_timeseries(seq, amp_min, amp_max, bits_per=8, binarize=True):
