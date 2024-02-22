@@ -15,6 +15,24 @@ import configparser
 import json
 from tqdm import tqdm
 import copy
+import logging
+import logging.handlers
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# always write everything to the rotating log files
+if not os.path.exists('logs'): os.mkdir('logs')
+log_file_handler = logging.handlers.TimedRotatingFileHandler('logs/args.log', when='M', interval=2)
+log_file_handler.setFormatter( logging.Formatter('%(asctime)s [%(levelname)s](%(name)s:%(funcName)s:%(lineno)d): %(message)s') )
+log_file_handler.setLevel(logging.DEBUG)
+logger.addHandler(log_file_handler)
+
+# also log to the console at a level determined by the --verbose flag
+console_handler = logging.StreamHandler() # sys.stderr
+console_handler.setLevel(logging.CRITICAL) # set later by set_log_level_from_verbose() in interactive sessions
+console_handler.setFormatter( logging.Formatter('[%(levelname)s](%(name)s): %(message)s') )
+logger.addHandler(console_handler)
+
 
 # import data_setup
 from predicament.utils.file_utils import load_dataframe_and_config
@@ -63,31 +81,6 @@ def get_parent_path(datatype, subdir):
         os.makedirs(parent_path)
     return parent_path
 
-### Moved to utils
-##def write_dataframe_and_config(
-##        dir_path, data, config, data_fname, config_fname='details.cfg'):
-##    data_path = os.path.join(dir_path, data_fname)
-##    if not os.path.exists(dir_path):
-##        os.makedirs(dir_path)
-##    print(f"writing data to {data_path}")
-##    # write with progress bar https://stackoverflow.com/questions/64695352/pandas-to-csv-progress-bar-with-tqdm 
-##    data.to_csv(data_path)
-##    config_path = os.path.join(dir_path, config_fname)
-##    print(f"writing config to {config_path}")
-##    with open(config_path, 'w') as config_file:
-##        config.write(config_file)
-
-##def load_dataframe_and_config(
-##        dir_path, data_fname, config_fname='details.cfg', **readargs):
-###    print(f"dir_path = {dir_path}")
-###    print(f"data_fname = {data_fname}")
-##    data_path = os.path.join(dir_path, data_fname)
-##    data = pd.read_csv(data_path, index_col=0,  **readargs)
-##    config_path = os.path.join(dir_path, config_fname)
-##    config = configparser.ConfigParser()
-##    with open(config_path, 'r') as config_file:
-##        config.read_file(config_file)
-##    return data, config
 
 
 def resolve_participant_data_settings(
@@ -144,20 +137,17 @@ def load_and_window_participant_data(
 
     participant_list, channels, window_size, window_step = resolve_participant_data_settings(
         data_format, participant_list, channel_group, channels, window_size, window_step)
-    print(f"resolved data settings: participant_list, channels, window_size, window_step = {(participant_list, channels, window_size, window_step)}")
+    logger.info(f"resolved data settings: participant_list, channels, window_size, window_step = {(participant_list, channels, window_size, window_step)}")
     # load data from file
     all_participants_data = create_participant_data(
         participant_list=participant_list, data_format=data_format)
-#    print(f"all_participants_data.keys() = {list(all_participants_data.keys())}")
     # window data by specified size and step
     all_windowed_data = window_all_participants_data(
             all_participants_data, conditions, channels, window_size,
             window_step, condition_fragile=False, channel_fragile=False,
             copy=False)
-#    print(f"all_windowed_data.keys() = {list(all_windowed_data.keys())}")
     data_by_participant, label_mapping = merge_condition_data(
         all_windowed_data)   
-#    print(f"data_by_participant.keys() = {list(data_by_participant.keys())}")
     # record information about data
     first_ID = list(all_participants_data.keys())[0]
     # all sample rates are the same
@@ -171,7 +161,7 @@ def load_and_window_participant_data(
         label_mapping=label_mapping, 
         data_format=data_format)
     loadargs = { k:str(v) for k, v in loadargs.items()}
-    print(f"loadargs = {loadargs}")
+    logger.debug(f"loadargs = {loadargs}")
     config['LOAD'] = loadargs        
     return data_by_participant, config
     
@@ -249,26 +239,26 @@ def consolidate_windowed_data(
     Fs = int(config['LOAD']['sample_rate'])
     window_size = int(config['LOAD']['window_size'])
     time = window_size/Fs
-    print(f"Loaded participant-wise data")
-    print(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
-    print(f"Creating consolidated list-of-lists of windowed data:")
+    logger.info(f"Loaded participant-wise data")
+    logger.info(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
+    logger.info(f"Creating consolidated list-of-lists of windowed data:")
     timeseries_lol = []
     for participant, (part_data, part_conditions) in tqdm(data_by_participant.items(), total=len(data_by_participant)):
-#        print(f"For {participant} have data:\t{part_data}")
-#        print(f"With conditions:\t{part_conditions}")
         part_conditions = part_conditions.astype(int)
         last_condition = part_conditions[0]
         index = 0
         for row, condition in zip(part_data, part_conditions):
             timeseries_lol.append([participant, condition, index] + list(row))
             if (condition != last_condition):
-                index += window_size
+                index += 1
             else:
                 index = 0
+            last_condition = condition
     #
-    print(f"Constructing dataframe...")
+    logger.info(f"Constructing dataframe...")
     timepoints = np.arange(row.size//n_channels)
-    label_cols = ['participant', 'condition', 'start time']
+    # window index is a local integer identifier for different windows for the same participant and condition
+    label_cols = ['participant', 'condition', 'window index']
     columns = label_cols + [ ch+f'[{t}]' for ch in channels for t in timepoints]
     #timeseries_df = pd.DataFrame(timeseries_lol, columns=columns)
     #timeseries_lol_chunks = np.array_split(timeseries_lol, 100)
@@ -312,7 +302,7 @@ def prepare_feature_data(
             raise ValueError('')
     # 
     windowed_parent_path = get_parent_path('windowed', subdir)
-    print("Loading windowed data")
+    logger.info("Loading windowed data")
     windowed_df, windowed_config = load_dataframe_and_config(
         windowed_parent_path, windowed_fname)
     n_channels = int(windowed_config['LOAD']['n_channels'])
@@ -321,12 +311,12 @@ def prepare_feature_data(
     Fs = int(windowed_config['LOAD']['sample_rate'])
     window_size = int(windowed_config['LOAD']['window_size'])
     time = window_size/Fs
-    print(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
+    logger.info(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     label_cols = json. loads(windowed_config['WINDOWED']['label_cols'].replace("'",'"') )
     # featured data may or may not pre-exist, set corresponding DataFrame
     # to None if it does not
     featured_parent_path = get_parent_path('featured', subdir)
-    print("Loading pre-existing featured data if it exists")
+    logger.info("Loading pre-existing featured data if it exists")
     try:
         featured_df, featured_config = load_dataframe_and_config(
             featured_parent_path, featured_fname)
@@ -337,7 +327,7 @@ def prepare_feature_data(
     timeseries_cols = [col for col in windowed_df.columns if not col in label_cols ]
     label_df = windowed_df[label_cols]
     windowed_timeseries_df = windowed_df[timeseries_cols]
-    print(f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    logger.info(f"Creating featured list-of-lists for features:\n\t{feature_set}")
     windowed_data = windowed_timeseries_df.to_numpy()
     windowed_data = windowed_data.reshape((-1,n_channels,window_size))
     amp_means = np.mean(np.mean(windowed_data, axis=2), axis=0)
@@ -346,7 +336,7 @@ def prepare_feature_data(
     if entropy_tols is None:
         entropy_tols = 0.2*np.mean(np.std(windowed_data
                 , axis=2), axis=0)
-        print(f"inferred entropy_tols = {entropy_tols}")
+        logger.debug(f"inferred entropy_tols = {entropy_tols}")
     features_lol = []
     for index in tqdm(np.arange(len(windowed_df))):
         label_row = label_df.iloc[index].to_list()
@@ -360,7 +350,7 @@ def prepare_feature_data(
         features_lol.append(        
                 label_row + list(features))
     all_columns = label_cols + feature_names
-    print(f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    logger.info(f"Creating featured list-of-lists for features:\n\t{feature_set}")
     if featured_df is None:
         chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
         chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
@@ -381,11 +371,11 @@ def prepare_feature_data(
         chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
         n_chunks = chunk_indices.size-1
         # create blank columns for all the new features
-        print(f"label_cols = {label_cols}")
-        print(f"feature_names = {feature_names}")
-        print(f"len(feature_names) = {len(feature_names)}")
-        print(f"len(features_only_lol) = {len(features_only_lol)}")
-        print(f"len(features_only_lol[0]) = {len(features_only_lol[0])}")
+        logger.debug(f"label_cols = {label_cols}")
+        logger.debug(f"feature_names = {feature_names}")
+        logger.debug(f"len(feature_names) = {len(feature_names)}")
+        logger.debug(f"len(features_only_lol) = {len(features_only_lol)}")
+        logger.debug(f"len(features_only_lol[0]) = {len(features_only_lol[0])}")
         featured_df[feature_names] = None
         # if using iloc need column indexes so
         feature_indexes = [featured_df.columns.get_loc(c) for c in feature_names]
@@ -480,11 +470,30 @@ def create_parser():
         '-w', '--window-size', type=int)
     parser.add_argument(
         '-s', '--window-step', type=int)
+        
+    # general        
+    parser.add_argument('-V', '--version', action="version", version="%(prog)s 0.1")
+    parser.add_argument('-v', '--verbose', action="count", help="verbose level... repeat up to three times.")
+        
     return parser
 
+def set_log_level_from_verbose(args):
 
+    if not args.verbose:
+        console_handler.setLevel('ERROR')
+    elif args.verbose == 1:
+        console_handler.setLevel('WARNING')
+    elif args.verbose == 2:
+        console_handler.setLevel('INFO')
+    elif args.verbose >= 3:
+        console_handler.setLevel('DEBUG')
+    else:
+        logger.critical("UNEXPLAINED NEGATIVE COUNT!")
+        
 if __name__ == '__main__':
     args = create_parser().parse_args()
+    set_log_level_from_verbose(args)
     kwargs = vars(args)
+    kwargs.pop('verbose')
     main(**kwargs)
     

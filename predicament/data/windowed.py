@@ -65,8 +65,10 @@ def window_all_participants_data(
         condition_fragile=True, channel_fragile=True, copy=True):
     """
     Creates dictionary of dictionaries of windowed data.
-    Outer dictionary is indexed by particpant ID,
-    Inner dictionary is indexed by condition
+    
+    parameters
+    ----------
+    all_participants_data :
     condition_fragile: 
         If True means function will raise error if any conditions are not 
         available either due to missing condition in ParticipantData object or
@@ -77,6 +79,14 @@ def window_all_participants_data(
         available in ParticipantData object. If False then all conditions
         will be silently excluded for that participant and the participant will
         be removed from the dictionary.
+        
+    returns
+    -------
+    all_windowed_data
+        Outer dictionary is indexed by particpant ID, values are inner dictionaries
+        Inner dictionary is indexed by condition, values are 2d arrays of
+        participant-condition windowed data
+        
     """
     all_windowed_data = {}
     for participant, participant_data in all_participants_data.items():
@@ -98,6 +108,13 @@ def window_all_participants_data(
             all_windowed_data[participant] = participant_windowed_data
     return all_windowed_data
 
+def get_window_start_in_event_time(window_index, window_step, sample_rate):
+    start_sample_index = window_index*window_step
+    in_event_start_time = start_sample_index/sample_rate
+    return in_event_start_time
+
+def get_window_duration(window_size, sample_rate):
+    return window_size/sample_rate
 
 ##TODO move to test framework and apply asserts
 def testing_window_all_participants_data():

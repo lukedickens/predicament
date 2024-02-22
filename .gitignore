@@ -1,6 +1,7 @@
 # 
 data
 *pyc
+logs
 
 # self-input files
 data_setup.py

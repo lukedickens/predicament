@@ -12,11 +12,14 @@ from predicament.utils.config import EVENT_DETAILS_PATH
 from predicament.utils.config import EXP_INFO_PATH
 from predicament.utils.config import BUFFER_INTERVAL
 
+import logging
+logger = logging.getLogger(__name__)
+
 class ParticipantEvents(object):
     """
     Stores the event data for a given participant. This includes the
-    conditions for the event, the start time and the end time as well
-    as the overall start time. This can be used to appropriately reference 
+    conditions for the event, the condition start time and the end time as well
+    as the overall participants start time. This can be used to appropriately reference 
     timeseries data which is associated with these events.
     """
     def __init__(self, participant, buffer_interval=BUFFER_INTERVAL) -> None:
@@ -28,6 +31,9 @@ class ParticipantEvents(object):
         self.buffer_interval = buffer_interval
         
     def set_exp_datetime(self, date, time_hms):
+        """
+        Get the global start datetime of the experimental data
+        """
         self.exp_date = date
         self.exp_start_time = local2unix(date + " " + time_hms)
 
@@ -46,10 +52,9 @@ class ParticipantEvents(object):
             end_timestamp = local2unix(self.exp_date + " " + str(end))
         except:
             end_timestamp = None
-        if verbose:
-            print(f"(start_timestamp, end_timestamp) = {(start_timestamp, end_timestamp)}")
+        logger.debug(f"(start_timestamp, end_timestamp) = {(start_timestamp, end_timestamp)}")
         if validation and (start_timestamp is None or end_timestamp is None):
-            print(f"{self.ID}:{condition} is valid but timestamps have issues. What does valid mean?") 
+            logger.warn(f"{self.ID}:{condition} is valid but timestamps have issues. What does valid mean?") 
         self.events_info[condition] = {
             "start": start_timestamp,
             "end": end_timestamp,
@@ -81,15 +86,28 @@ class ParticipantEvents(object):
         return (self.events_info[condition]['start'] != None and self.events_info[condition]['end'] != None)
 
     def get_event_start_and_end(self, condition):
+        """
+        Global start and end time of condition (unix time)
+        """
         uni_start = self.events_info[condition]["start"]
         uni_end = self.events_info[condition]["end"]
         return uni_start, uni_end
 
+    def unixtime_to_studytime(self, unixtime):
+        return unixtime - self.exp_start_time
+
+    def studytime_to_unixtime(self, studytime):
+        return studytime + self.exp_start_time
+
     def get_event_studytimes_raw(self, condition):
+        """
+        Relative raw start and end time of condition as compared to the study
+        participant's start time (does not include buffer time)
+        """
         uni_start, uni_end = self.get_event_start_and_end(condition)
         #print(f"{self.ID}:{condition}: {uni_start}--{uni_end}")
         try:
-            return uni_start - self.exp_start_time, uni_end - self.exp_start_time
+            return self.unixtime_to_studytime(uni_start), self.unixtime_to_studytime(uni_end)
         except TypeError:
             raise ValueError(f'Missing condition {condition} for participant {self.ID}')
 
@@ -100,7 +118,24 @@ class ParticipantEvents(object):
     def get_event_duration(self,condition):        
         start, end = self.get_event_studytimes(condition)
         return end-start
-        
+
+    def in_event_time_to_studytime(self,condition,in_event_time):
+        """
+        in_event_time indicates how long (in seconds) after the event is considered
+        to have started (this includes the buffer interval).
+        """
+        if in_event_time > self.get_event_duration(condition):
+            raise ValueError('Invalid event time, longer than condition duration')
+        condition_start_studytime, _ = self.get_event_studytimes(condition)
+        return in_event_time + condition_start_studytime
+
+    def in_event_time_to_unixtime(self,condition,in_event_time):
+        """
+        in_event_time indicates how long (in seconds) after the event is considered
+        to have started (this includes the buffer interval).
+        """
+        in_studytime = self.in_event_time_to_studytime(condition,in_event_time)
+        return self.studytime_to_unixtime(in_studytime)
 
     def save_event_window_to_json(self, condition, json_path, windows = 1):
         exp_start = self.exp_start_time
