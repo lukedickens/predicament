@@ -125,6 +125,10 @@ class ParticipantEvents(object):
         to have started (this includes the buffer interval).
         """
         if in_event_time > self.get_event_duration(condition):
+            print(f"participant = {self.ID}")
+            print(f"condition = {condition}")
+            print(f"in_event_time = {in_event_time}")
+            print(f"self.get_event_duration(condition) = {self.get_event_duration(condition)}")
             raise ValueError('Invalid event time, longer than condition duration')
         condition_start_studytime, _ = self.get_event_studytimes(condition)
         return in_event_time + condition_start_studytime

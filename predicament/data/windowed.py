@@ -116,6 +116,80 @@ def get_window_start_in_event_time(window_index, window_step, sample_rate):
 def get_window_duration(window_size, sample_rate):
     return window_size/sample_rate
 
+##
+def correct_window_indices(participants, label_mapping, datadf):
+    for participant in participants:
+        for condition_id, condition_name in enumerate(label_mapping):
+            filter_ = datadf['participant'] == participant
+            filter_ &= datadf['condition'] == condition_id
+            pc_indices = datadf[filter_].index
+            num_elements = len(pc_indices)
+            datadf.loc[pc_indices, 'window index'] = np.arange(num_elements)
+
+
+def get_window_start_times_for_participant(
+        participant_events, condition_id, label_mapping,
+        datadf, window_step, sample_rate):
+    """
+    inputs
+    ------
+    participant_events [predicament.data.events.ParticipantEvents] -
+        for participant to get starttimes for
+    condition_id [int] - condition_id in label_mapping list
+    datadf -
+        pandas.DataFrame of data each row representing a timeseries window
+        or features extracted from a time series window.
+    """
+    condition_name = label_mapping[condition_id]
+    filter_ = datadf['participant']==participant_events.ID
+    filter_ &=  datadf['condition']==condition_id
+    pc_indices = datadf[filter_].index
+    window_start_unixtimes = np.empty(pc_indices.shape[0])
+    for w, window_index in enumerate(datadf.loc[pc_indices,'window index']):
+        try:
+            window_start_in_event_time = \
+                get_window_start_in_event_time(
+                    window_index, window_step, sample_rate)
+        except:
+            print(f"window_index = {window_index}")
+            print(f"window_step = {window_step}")
+            print(f"sample_rate = {sample_rate}")
+            raise
+        window_start_unixtime = \
+            participant_events.in_event_time_to_unixtime(
+                condition_name,window_start_in_event_time)
+        window_start_unixtimes[w] = window_start_unixtime
+    return window_start_unixtimes
+
+def insert_window_start_and_end_times(
+        all_participants_events, label_mapping, datadf,  window_size, window_step,
+        sample_rate):
+
+    window_duration = get_window_duration(window_size, sample_rate)
+    start_time_col = 'start time'
+    end_time_col = 'end time'
+    if not start_time_col in datadf.columns:
+        datadf.insert(3,start_time_col, None)
+    if not end_time_col in datadf.columns:
+        datadf.insert(4,end_time_col, None)
+    participants = list(all_participants_events.keys())
+    for participant, participant_events in all_participants_events.items():
+        assert(participant == participant_events.ID)
+        for condition_id, condition_name in enumerate(label_mapping):
+            filter_ = datadf['participant'] == participant
+            filter_ &= datadf['condition'] == condition_id
+            print(f"participant = {participant}, condition = {label_mapping[condition_id]}")
+            pc_indices = datadf[filter_].index
+#            print(f"len(pc_indices) = {len(pc_indices)}")
+            try:
+                start_times = get_window_start_times_for_participant(
+                    participant_events, condition_id, label_mapping,
+                    datadf, window_step, sample_rate)
+                datadf.loc[pc_indices,start_time_col] = start_times
+            except KeyError:
+                pass
+    datadf[end_time_col] = datadf['start time'] + window_duration
+    
 ##TODO move to test framework and apply asserts
 def testing_window_all_participants_data():
     # loading default values

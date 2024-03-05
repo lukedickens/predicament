@@ -76,6 +76,7 @@ E4_CSV_FILES = [
 #    'tags.csv', # tags not used in this dataset (see E4 folder file info.txt)
     ]   
 
+E4_IBI_FILE = 'IBI.csv'
 #E4_CHANNELS_TO_CSV_FILES = {
 #        fname.split('.')[0].lower(): fname for fname in E4_CSV_FILES }
 
