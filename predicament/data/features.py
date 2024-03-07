@@ -386,3 +386,21 @@ def convert_timeseries_to_features(
          # https://raphaelvallat.com/bandpower.html
          # | angle	|	Angle between two vectors |
     return features, feature_names
+    
+    
+def add_features_to_dataframe(
+        existing_df, new_df, label_cols):
+    merge_on = label_cols
+    left_cols = existing_df.columns
+    right_cols = new_df.columns
+    # new dataframe will overwrite any columns that are not labels and have
+    # matching column names
+    preserved_left_cols = [
+        c for c in left_cols if (c in merge_on) or (not c in right_cols) ]
+    # hide the columns that will be overridden
+    existing_df = existing_df.loc[:,preserved_left_cols]
+    result_df = pd.merge(existing_df, new_df, how='inner')
+    if len(existing_df.index) != len(result_df.index):
+        raise ValueError('Cannot merge as rows do not coincide')
+    return result_df
+
