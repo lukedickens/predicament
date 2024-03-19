@@ -61,6 +61,7 @@ from predicament.data.features import INFO_FEATURE_GROUP
 from predicament.data.features import FREQ_FEATURE_GROUP
 from predicament.data.features import SUPPORTED_FEATURE_GROUP
 from predicament.data.features import convert_timeseries_to_features
+from predicament.data.features import add_features_to_dataframe
 
 from predicament.utils import file_utils
 
@@ -118,6 +119,8 @@ def resolve_participant_data_settings(
             channels = list(channels)
         if window_size is None:
             window_size = DEFAULT_E4_WINDOW_SIZE
+    else:
+        raise ValueError(f"Unrecognised data format {data_format}")
     if window_step is None:
         window_step = window_size//DEFAULT_WINDOW_OVERLAP_FACTOR
     return participant_list, channels, window_size, window_step
@@ -127,14 +130,31 @@ def get_channels_from_string(channels_as_str):
     return channels
 
 
-
-
 def load_and_window_participant_data(
         participant_list=None,
         conditions=TARGET_CONDITIONS, data_format=None, 
         channels=None, channel_group=None,
         window_size=None, window_step=None, **kwargs):
-
+    """
+    inputs
+    ------
+    participant_list - list of participants for whom data is to be loaded
+    conditions - list of conditions for which the data is being loaded
+    data_format -
+        what is the raw data format type of the data to be loaded, e.g.
+        dreem vs E4
+    channels [optional] -
+        which timeseries channels are to be included in output
+    channel_group - 
+        predefined set of channels by set name
+    window_size - 
+        size of window in samples
+    window_step - 
+        step size, in number of samples, between the start of the ith window and
+        the start of the (i+1)th
+    kwargs -
+        input args that will be ignored [unsafe] TODO: make safe
+    """
     participant_list, channels, window_size, window_step = resolve_participant_data_settings(
         data_format, participant_list, channel_group, channels, window_size, window_step)
     logger.info(f"resolved data settings: participant_list, channels, window_size, window_step = {(participant_list, channels, window_size, window_step)}")
@@ -223,7 +243,113 @@ def prepare_between_subject_cv_partition_files(**loadargs):
             os.path.join(fold_path, "test_label.csv"),
             tst_lab, delimiter=",")
 
+def write_data_by_participant_to_dataframe_alt(
+        data_by_participant, channels, window_size):
+    timepoints = np.arange(window_size)
+    label_cols = ['participant', 'condition', 'window index']
+    window_columns = [ ch+f'[{t}]' for ch in channels for t in timepoints]
+    # get windows and condition labels as two np arrays
+    # stacked in participant order 
+    windows_np, condition_labels_np = map(
+        np.concatenate, 
+        zip(*data_by_participant.values()))
+    # windows and condition labels as dataframe and series object resp.
+    windows = pd.DataFrame(windows_np, columns=window_columns)
+    
+    
+    # to produce column of participant labels first we need to know how many
+    # windows for each participant
+    window_counts = {
+        prt: len(cnds) for prt,(wndws,cnds) in data_by_participant.items()}
+    # producing the participant labels
+#    participant_labels = pd.Series(
+#        np.repeat(list(window_counts), list(window_counts.values())),
+#        name='participant')
+#    condition_labels = pd.Series(condition_labels_np, name='condition')
+    participant_labels_np = np.repeat(
+        list(window_counts), list(window_counts.values()))
+    participant_condition_labels = pd.DataFrame(
+        np.vstack((participant_labels_np, condition_labels_np.astype(int))).T,
+        columns=('participant','condition') )
+    # the participant labels then provide the window indices with the
+    # groupby...cumcount combined call
+#    window_indices = participant_labels.groupby(
+#        participant_labels).cumcount().rename('window index')
+    window_indices = participant_condition_labels.groupby(
+        ["participant", "condition"]).cumcount().rename('window index')
+    # finally we horizontally stack the first three series as label columns
+    # and the windows dataframe
+#    windowed_df = pd.concat(
+#        [participant_labels, condition_labels, window_indices, windows],
+#        axis=1)
+    windowed_df = pd.concat(
+        [participant_condition_labels, window_indices, windows],
+        axis=1)
+    # the first three columns are label columns
+    label_cols = windowed_df.columns[:3]
+    return windowed_df, label_cols
+    ## older buggy version
+#    columns = label_cols + window_columns 
+#    window_participant_iterator = tqdm(
+#        data_by_participant.items(), total=len(data_by_participant))
+#    lst = []
+#    for participant, (part_windows, part_conditions) \
+#            in window_participant_iterator:
+#        uniques, counts = np.unique(
+#                part_conditions, return_counts=True)
+#        window_indices = np.concatenate(
+#            [np.arange(count) for count in counts ])
+#        this_N, this_K = part_windows.shape
+#        these_participants = [participant]*this_N
+#        this_df = pd.DataFrame(
+#            zip(
+#                these_participants, # participant
+#                part_conditions, # condition
+#                window_indices, # window index
+#                *part_windows.T.tolist()
+#                ), columns=columns)
+#        lst.append(this_df)
+#    timeseries_df = pd.concat(lst)
+#    return timeseries_df, label_cols
 
+def write_data_by_participant_to_dataframe(
+        data_by_participant, channels, window_size):
+#    timepoints = np.arange(row.size//n_channels)
+    timepoints = np.arange(window_size)
+    # window index is a local integer identifier for different windows for the same participant and condition
+    label_cols = ['participant', 'condition', 'window index']
+    columns = label_cols + [ ch+f'[{t}]' for ch in channels for t in timepoints]
+
+    logger.info(f"Creating consolidated list-of-lists of windowed data:")
+    timeseries_lol = []
+    window_participant_iterator = tqdm(
+        data_by_participant.items(), total=len(data_by_participant))
+    for participant, (part_windows, part_conditions) in window_participant_iterator:
+        part_conditions = part_conditions.astype(int)
+        last_condition = part_conditions[0]
+        index = 0
+        for row, condition in zip(part_windows, part_conditions):
+            timeseries_lol.append([participant, condition, index] + list(row))
+            if (condition != last_condition):
+                index += 1
+            else:
+                index = 0
+            last_condition = condition
+    #
+    logger.info(f"Constructing dataframe...")
+    #timeseries_df = pd.DataFrame(timeseries_lol, columns=columns)
+    #timeseries_lol_chunks = np.array_split(timeseries_lol, 100)
+    n_rows = len(timeseries_lol)
+    chunk_indices = np.linspace(0,n_rows,101).astype(int)
+    timeseries_df = pd.DataFrame(columns=columns)
+    for start, end in tqdm(
+            zip(chunk_indices[:-1], chunk_indices[1:]),
+            total=chunk_indices.size-1):
+        timeseries_df = pd.concat(
+            (timeseries_df, pd.DataFrame(timeseries_lol[start:end], columns=columns)),
+            ignore_index=True)
+    return timeseries_df, label_cols
+    
 def consolidate_windowed_data(
         parent_path=WINDOWED_BASE_PATH, subdir=None,
         windowed_fname='windowed.csv', **loadargs):
@@ -241,36 +367,46 @@ def consolidate_windowed_data(
     time = window_size/Fs
     logger.info(f"Loaded participant-wise data")
     logger.info(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
-    logger.info(f"Creating consolidated list-of-lists of windowed data:")
-    timeseries_lol = []
-    for participant, (part_data, part_conditions) in tqdm(data_by_participant.items(), total=len(data_by_participant)):
-        part_conditions = part_conditions.astype(int)
-        last_condition = part_conditions[0]
-        index = 0
-        for row, condition in zip(part_data, part_conditions):
-            timeseries_lol.append([participant, condition, index] + list(row))
-            if (condition != last_condition):
-                index += 1
-            else:
-                index = 0
-            last_condition = condition
-    #
-    logger.info(f"Constructing dataframe...")
-    timepoints = np.arange(row.size//n_channels)
-    # window index is a local integer identifier for different windows for the same participant and condition
-    label_cols = ['participant', 'condition', 'window index']
-    columns = label_cols + [ ch+f'[{t}]' for ch in channels for t in timepoints]
-    #timeseries_df = pd.DataFrame(timeseries_lol, columns=columns)
-    #timeseries_lol_chunks = np.array_split(timeseries_lol, 100)
-    n_rows = len(timeseries_lol)
-    chunk_indices = np.linspace(0,n_rows,101).astype(int)
-    timeseries_df = pd.DataFrame(columns=columns)
-    for start, end in tqdm(
-            zip(chunk_indices[:-1], chunk_indices[1:]),
-            total=chunk_indices.size-1):
-        timeseries_df = pd.concat(
-            (timeseries_df, pd.DataFrame(timeseries_lol[start:end], columns=columns)),
-            ignore_index=True)
+
+###    timepoints = np.arange(row.size//n_channels)
+##    timepoints = np.arange(window_size)
+##    # window index is a local integer identifier for different windows for the same participant and condition
+##    label_cols = ['participant', 'condition', 'window index']
+##    columns = label_cols + [ ch+f'[{t}]' for ch in channels for t in timepoints]
+
+##    logger.info(f"Creating consolidated list-of-lists of windowed data:")
+##    timeseries_lol = []
+##    window_participant_iterator = tqdm(
+##        data_by_participant.items(), total=len(data_by_participant))
+##    for participant, (part_windows, part_conditions) in window_participant_iterator:
+##        part_conditions = part_conditions.astype(int)
+##        last_condition = part_conditions[0]
+##        index = 0
+##        for row, condition in zip(part_windows, part_conditions):
+##            timeseries_lol.append([participant, condition, index] + list(row))
+##            if (condition != last_condition):
+##                index += 1
+##            else:
+##                index = 0
+##            last_condition = condition
+##    #
+##    logger.info(f"Constructing dataframe...")
+##    #timeseries_df = pd.DataFrame(timeseries_lol, columns=columns)
+##    #timeseries_lol_chunks = np.array_split(timeseries_lol, 100)
+##    n_rows = len(timeseries_lol)
+##    chunk_indices = np.linspace(0,n_rows,101).astype(int)
+##    timeseries_df = pd.DataFrame(columns=columns)
+##    for start, end in tqdm(
+##            zip(chunk_indices[:-1], chunk_indices[1:]),
+##            total=chunk_indices.size-1):
+##        timeseries_df = pd.concat(
+##            (timeseries_df, pd.DataFrame(timeseries_lol[start:end], columns=columns)),
+##            ignore_index=True)
+    timeseries_df, label_cols = write_data_by_participant_to_dataframe_alt(
+        data_by_participant, channels, window_size)
+#    timeseries_df, label_cols = write_data_by_participant_to_dataframe(
+#        data_by_participant, channels, window_size)
+            
     # save down to file.
     windowed_dir_path = os.path.join(parent_path, subdir)
     config['WINDOWED'] = {}
@@ -300,7 +436,7 @@ def prepare_feature_data(
         feature_set = set(feature_set.split(','))
         if len(feature_set) == 0:
             raise ValueError('')
-    # 
+    # load windowed data and get the relevant configuration
     windowed_parent_path = get_parent_path('windowed', subdir)
     logger.info("Loading windowed data")
     windowed_df, windowed_config = load_dataframe_and_config(
@@ -311,32 +447,31 @@ def prepare_feature_data(
     Fs = int(windowed_config['LOAD']['sample_rate'])
     window_size = int(windowed_config['LOAD']['window_size'])
     time = window_size/Fs
-    logger.info(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
-    label_cols = json. loads(windowed_config['WINDOWED']['label_cols'].replace("'",'"') )
-    # featured data may or may not pre-exist, set corresponding DataFrame
-    # to None if it does not
-    featured_parent_path = get_parent_path('featured', subdir)
-    logger.info("Loading pre-existing featured data if it exists")
-    try:
-        featured_df, featured_config = load_dataframe_and_config(
-            featured_parent_path, featured_fname)
-    except FileNotFoundError:
-        featured_df = None
-        featured_config = windowed_config
+    logger.info(
+        f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
+    label_cols = json.loads(windowed_config['WINDOWED']['label_cols'].replace("'",'"') )
+        
     #
     timeseries_cols = [col for col in windowed_df.columns if not col in label_cols ]
     label_df = windowed_df[label_cols]
     windowed_timeseries_df = windowed_df[timeseries_cols]
-    logger.info(f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    logger.info(
+        f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    # convert to numpy array and reshape into tensor of shape NxCxW
+    # where N is number of windows, C is number of channels and W is window size
     windowed_data = windowed_timeseries_df.to_numpy()
     windowed_data = windowed_data.reshape((-1,n_channels,window_size))
+    # get per channel means mins and maxes across dataset
     amp_means = np.mean(np.mean(windowed_data, axis=2), axis=0)
     amp_mins = np.min(np.min(windowed_data, axis=2), axis=0)
     amp_maxes = np.max(np.max(windowed_data, axis=2), axis=0)
+    ## default value for entropy_tols
     if entropy_tols is None:
         entropy_tols = 0.2*np.mean(np.std(windowed_data
                 , axis=2), axis=0)
         logger.debug(f"inferred entropy_tols = {entropy_tols}")
+    # creating a list of list of features, one list per window
+    logger.info(f"Creating featured list-of-lists for features:\n\t{feature_set}")
     features_lol = []
     for index in tqdm(np.arange(len(windowed_df))):
         label_row = label_df.iloc[index].to_list()
@@ -349,46 +484,65 @@ def prepare_feature_data(
             entropy_tols=entropy_tols, hurst_kind=hurst_kind)
         features_lol.append(        
                 label_row + list(features))
+                
+    ## we will now construct a dataframe of the features
+    # featured data may or may not pre-exist, set corresponding DataFrame
+    # to None if it does not
+    featured_parent_path = get_parent_path('featured', subdir)
+    logger.info("Loading pre-existing featured data if it exists")
+    try:
+        featured_df, featured_config = load_dataframe_and_config(
+            featured_parent_path, featured_fname)
+    except FileNotFoundError:
+        featured_df = None
+        featured_config = windowed_config
+    logger.info("Building new featured dataframe")
+    # the columns of the new dataframe will include the label columns
+    # and all the "new" feature columns
     all_columns = label_cols + feature_names
-    logger.info(f"Creating featured list-of-lists for features:\n\t{feature_set}")
+    chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
+    chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
+    n_chunks = chunk_indices.size-1
+    for i, (start, end) in enumerate(tqdm(chunk_slices, total=n_chunks)):
+        if i == 0:
+            new_featured_df = pd.DataFrame(columns=all_columns)
+        if start != end:
+            new_featured_df = pd.concat(
+                (featured_df, pd.DataFrame(features_lol[start:end], columns=all_columns)),
+                ignore_index=True)
     if featured_df is None:
-        chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
-        chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
-        n_chunks = chunk_indices.size-1
-        for i, (start, end) in enumerate(tqdm(chunk_slices, total=n_chunks)):
-            if i == 0:
-                featured_df = pd.DataFrame(columns=all_columns)
-            if start != end:
-                featured_df = pd.concat(
-                    (featured_df, pd.DataFrame(features_lol[start:end], columns=all_columns)),
-                    ignore_index=True)
-#        featured_config['FEATURED'] = {}
-#        featured_config['FEATURED']['feature_set'] = str(list(feature_set)).replace("'",'"')
-#        featured_config['FEATURED']['features'] = str(feature_names).replace("'",'"')
+        featured_df = new_featured_df
     else:
-        features_only_lol = [ row[len(label_cols):] for row in features_lol ]
-        chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
-        chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
-        n_chunks = chunk_indices.size-1
-        # create blank columns for all the new features
-        logger.debug(f"label_cols = {label_cols}")
-        logger.debug(f"feature_names = {feature_names}")
-        logger.debug(f"len(feature_names) = {len(feature_names)}")
-        logger.debug(f"len(features_only_lol) = {len(features_only_lol)}")
-        logger.debug(f"len(features_only_lol[0]) = {len(features_only_lol[0])}")
-        featured_df[feature_names] = None
-        # if using iloc need column indexes so
-        feature_indexes = [featured_df.columns.get_loc(c) for c in feature_names]
-        for start, end in tqdm(chunk_slices, total=n_chunks):
-            if start != end:
-                # loc is end-inclusive slicing, so we need end-1
-                #featured_df.loc[start:end-1,feature_names] = features_only_lol[start:end]
-                # iloc is end-exclusive slicing so we need just end
-                # but we need the ids of the columns
-                featured_df.iloc[start:end,feature_indexes] = features_only_lol[start:end]
+#        # there is a better way, see predicament.data.features.add_features_to_dataframe
+#        features_only_lol = [ row[len(label_cols):] for row in features_lol ]
+#        chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
+#        chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
+#        n_chunks = chunk_indices.size-1
+#        # create blank columns for all the new features
+#        logger.debug(f"label_cols = {label_cols}")
+#        logger.debug(f"feature_names = {feature_names}")
+#        logger.debug(f"len(feature_names) = {len(feature_names)}")
+#        logger.debug(f"len(features_only_lol) = {len(features_only_lol)}")
+#        logger.debug(f"len(features_only_lol[0]) = {len(features_only_lol[0])}")
+#        featured_df[feature_names] = None
+#        # if using iloc need column indexes so
+#        feature_indexes = [featured_df.columns.get_loc(c) for c in feature_names]
+#        for start, end in tqdm(chunk_slices, total=n_chunks):
+#            if start != end:
+#                # loc is end-inclusive slicing, so we need end-1
+#                #featured_df.loc[start:end-1,feature_names] = features_only_lol[start:end]
+#                # iloc is end-exclusive slicing so we need just end
+#                # but we need the ids of the columns
+#                featured_df.iloc[start:end,feature_indexes] = features_only_lol[start:end]
+        #
+        logger.info("Merging new featured dataframe with pre-existing dataframe")
+        featured_df = add_features_to_dataframe(
+            featured_df, new_featured_df, label_cols)
         # incorporate pre-existing feature names and feature_set in config
-        old_feature_names = json.loads(featured_config['FEATURED']['feature_names'].replace("'",'"'))
-        old_feature_set = json.loads(featured_config['FEATURED']['feature_set'].replace("'",'"'))
+        old_feature_names = json.loads(
+            featured_config['FEATURED']['feature_names'].replace("'",'"'))
+        old_feature_set = json.loads(
+            featured_config['FEATURED']['feature_set'].replace("'",'"'))
         feature_set |= set(old_feature_set)
         feature_names = old_feature_names + list(feature_names)
     featured_config['FEATURED'] = {}
@@ -461,7 +615,7 @@ def create_parser():
         '--lzc-imp', default='flow',
         help="""The specific implementation of LempelZiv Complexity type""")
     parser.add_argument(
-        '-f', '--data-format', default='dreem')
+        '-f', '--data-format', default='dreem', choices=['dreem','E4'])
     parser.add_argument(
         '-g', '--channel-group')
     parser.add_argument(

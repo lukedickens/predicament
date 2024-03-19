@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 import scipy.signal
 from tqdm import tqdm
+import logging
+logger = logging.getLogger(__name__)
+
 
 from predicament.utils.config import STUDY_DATA_FOLDER
 from predicament.utils.config import EDF_FILE_PATHS
@@ -152,9 +155,9 @@ def read_all_participants_edf_files(
         all_participants_data, edf_file_paths, 
         sample_rate=DEFAULT_SAMPLE_RATE):
     for participant in all_participants_data.keys():
-        print(f"adding {participant}")
+        logger.info(f"adding {participant}")
         edf_file_path = edf_file_paths[participant]
-        print(f"\tfrom {edf_file_path}")
+        logger.info(f"\tfrom {edf_file_path}")
         participant_data = all_participants_data[participant]
         all_participants_data[participant] = read_edf_file_to_participant_data(
             participant_data, edf_file_path, sample_rate)
@@ -170,14 +173,12 @@ def read_edf_file_to_participant_data(
     participant - participant ID
     exclude_channels - channels to exclude from loading in from mne object.
     """
-#    print(f"edf_file_path = {edf_file_path}")
     mne_data = mne.io.read_raw_edf(edf_file_path)
     data_channel_names = mne_data.ch_names
     np_data = mne_data.get_data()
-#    print(f"mne_data.ch_names = {mne_data.ch_names}")
     participant_data.add_timeseries_data(
             np_data, data_channel_names, sample_rate, **kwargs)
-#    print("Successfully loaded EDF file for {} .".format(participant_data.ID))
+    logger.info("Successfully loaded EDF file for {} .".format(participant_data.ID))
     return participant_data
 
 def create_participant_data(
@@ -193,7 +194,6 @@ def create_participant_data(
 def create_participant_data_edf_only(
         participant_list=None,
         edf_file_paths=EDF_FILE_PATHS):
-#    print(f"participant_list = {participant_list}")
     ## multi step participant data creation
     # get all participants event information
     all_participants_events = load_event_info_from_csv(participant_list)
@@ -211,7 +211,6 @@ def load_E4_csv_data(full_dirpath, csv_files):
     for csv_fname in csv_files:
         if csv_fname == 'IBI.csv':
             continue
-#        print(f"csv_fname = {csv_fname}")
         csv_fpath = os.path.join(full_dirpath, csv_fname)
         df = pd.read_csv(csv_fpath, header=None)
         start_time = df.iloc[0,0].astype(int)
@@ -305,14 +304,14 @@ def read_E4_csv_data_to_participant_data(
     parameters
     ----------
     """
-#    print(f"loading directory: {full_dirpath}")
+    logger.info(f"loading directory: {full_dirpath}")
     csv_data = load_E4_csv_data(full_dirpath, csv_files)
     E4_data, data_channel_names, sample_rate, std_start_time = merge_E4_csv_data(csv_data, csv_files)
     participant_data.event_details.exp_start_time = std_start_time
     participant_data.sample_rate = sample_rate
     participant_data.add_timeseries_data(
             E4_data, data_channel_names, sample_rate, **kwargs)
-#    print("Successfully loaded E4 data for {} .".format(participant_data.ID))
+    logger.info("Successfully loaded E4 data for {} .".format(participant_data.ID))
     return participant_data
 
 def read_all_participants_E4_csv_data(
@@ -328,17 +327,14 @@ def read_all_participants_E4_csv_data(
 def create_participant_data_E4_only(
         participant_list=None,
         full_dirpaths=E4_FULL_DIRPATHS, csv_files=E4_CSV_FILES):
-#    print(f"participant_list = {participant_list}")
     ## multi step participant data creation
     # get all participants event information
     all_participants_events = load_event_info_from_csv(participant_list)
-#    print(f"all_participants_events = {all_participants_events}")
     # create ParticipantData objects with event info but no data
     all_participants_data = init_participants_data(all_participants_events)
     # load data into the ParticipantData objects
     all_participants_data = read_all_participants_E4_csv_data(
         all_participants_data, full_dirpaths, csv_files)
-#    print(f"all_participants_data = {all_participants_data}")
     return all_participants_data
 
 
@@ -364,9 +360,6 @@ def test_windowed_data():
     participant_data = all_participants_data[test_ID]
     windowed_data = participant_data.get_windowed_data_concat(
         test_condition, test_channels, window_size, step=window_step, copy=True)
-#    print(f"windowed_data = {windowed_data}")
-#    print(f"windowed_data.shape = {windowed_data.shape}")
-#    
     
 if __name__ == '__main__':
     testing_window_all_participants_data()

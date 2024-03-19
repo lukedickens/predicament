@@ -54,7 +54,7 @@ class ParticipantEvents(object):
             end_timestamp = None
         logger.debug(f"(start_timestamp, end_timestamp) = {(start_timestamp, end_timestamp)}")
         if validation and (start_timestamp is None or end_timestamp is None):
-            logger.warn(f"{self.ID}:{condition} is valid but timestamps have issues. What does valid mean?") 
+            logger.warn(f"{self.ID}:{condition} is valid but timestamps have issues.") 
         self.events_info[condition] = {
             "start": start_timestamp,
             "end": end_timestamp,

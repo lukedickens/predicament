@@ -5,6 +5,8 @@
 import os
 import numpy as np
 
+import logging
+logger = logging.getLogger(__name__)
 
 def merge_condition_data(nested_data):
     """
@@ -90,7 +92,7 @@ def window_all_participants_data(
     """
     all_windowed_data = {}
     for participant, participant_data in all_participants_data.items():
-        print(f"participant {participant} has type(participant_data) = {type(participant_data)}")
+#        print(f"participant {participant} has type(participant_data) = {type(participant_data)}")
         participant_windowed_data = {}
         for condition in conditions:
             try:
@@ -151,9 +153,9 @@ def get_window_start_times_for_participant(
                 get_window_start_in_event_time(
                     window_index, window_step, sample_rate)
         except:
-            print(f"window_index = {window_index}")
-            print(f"window_step = {window_step}")
-            print(f"sample_rate = {sample_rate}")
+            logger.info(f"window_index = {window_index}")
+            logger.info(f"window_step = {window_step}")
+            logger.info(f"sample_rate = {sample_rate}")
             raise
         window_start_unixtime = \
             participant_events.in_event_time_to_unixtime(
@@ -178,7 +180,7 @@ def insert_window_start_and_end_times(
         for condition_id, condition_name in enumerate(label_mapping):
             filter_ = datadf['participant'] == participant
             filter_ &= datadf['condition'] == condition_id
-            print(f"participant = {participant}, condition = {label_mapping[condition_id]}")
+#            logger.debug(f"participant = {participant}, condition = {label_mapping[condition_id]}")
             pc_indices = datadf[filter_].index
 #            print(f"len(pc_indices) = {len(pc_indices)}")
             try:
