@@ -50,6 +50,9 @@ from predicament.utils.config import DREEM_PARTICIPANT_IDS
 from predicament.utils.config import E4_PARTICIPANT_IDS
 from predicament.utils.config import DEFAULT_E4_CHANNELS
 
+from predicament.data.events import load_event_info_from_csv
+
+
 from predicament.data.timeseries import create_participant_data
 from predicament.data.windowed import window_all_participants_data
 from predicament.data.windowed import merge_condition_data
@@ -62,6 +65,10 @@ from predicament.data.features import FREQ_FEATURE_GROUP
 from predicament.data.features import SUPPORTED_FEATURE_GROUP
 from predicament.data.features import convert_timeseries_to_features
 from predicament.data.features import add_features_to_dataframe
+
+from predicament.data.windowed import insert_window_start_and_end_times
+from predicament.data.windowed import remove_window_start_and_end_times
+from predicament.data.hrv import update_df_with_rmssds
 
 from predicament.utils import file_utils
 
@@ -314,11 +321,11 @@ def consolidate_windowed_data(
     n_channels = int(config['LOAD']['n_channels'])
     channels = json.loads(config['LOAD']['channels'].replace("'",'"'))
     participant_list = json.loads(config['LOAD']['participant_list'].replace("'",'"'))
-    Fs = int(config['LOAD']['sample_rate'])
+    sample_rate = int(config['LOAD']['sample_rate'])
     window_size = int(config['LOAD']['window_size'])
-    time = window_size/Fs
+    time = window_size/sample_rate
     logger.info(f"Loaded participant-wise data")
-    logger.info(f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
+    logger.info(f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     # create a dataframe from this data
     timeseries_df, label_cols = write_data_by_participant_to_dataframe(
         data_by_participant, channels, window_size)
@@ -335,7 +342,8 @@ def prepare_feature_data(
         subdir, windowed_fname='windowed.csv', featured_fname='featured.csv',
         feature_set=None, feature_group=None,
         bits_per=1, lzc_type=None, lzc_imp=None,
-        entropy_tols=None, hurst_kind='random_walk', **kwargs):
+        entropy_tols=None, hurst_kind='random_walk',
+        normed_rmssd=True, **kwargs):
     if feature_set is None:
         if feature_group == 'stats':
             feature_set = STATS_FEATURE_GROUP
@@ -351,19 +359,27 @@ def prepare_feature_data(
         feature_set = set(feature_set.split(','))
         if len(feature_set) == 0:
             raise ValueError('')
+    if 'HRVRMSSD' in feature_set:
+        add_hrv_rmssd = True
+        feature_set.remove('HRVRMSSD')
+    else:
+        add_hrv_rmssd = False
     # load windowed data and get the relevant configuration
     windowed_parent_path = get_parent_path('windowed', subdir)
     logger.info("Loading windowed data")
     windowed_df, windowed_config = load_dataframe_and_config(
         windowed_parent_path, windowed_fname)
     n_channels = int(windowed_config['LOAD']['n_channels'])
+    label_mapping = json.loads(
+        windowed_config['LOAD']['label_mapping'].replace("'",'"'))
     channels = json.loads(windowed_config['LOAD']['channels'].replace("'",'"'))
     participant_list = json.loads(windowed_config['LOAD']['participant_list'].replace("'",'"'))
-    Fs = int(windowed_config['LOAD']['sample_rate'])
+    sample_rate = int(windowed_config['LOAD']['sample_rate'])
     window_size = int(windowed_config['LOAD']['window_size'])
-    time = window_size/Fs
+    window_step = int(windowed_config['LOAD']['window_step'])
+    time = window_size/sample_rate
     logger.info(
-        f"Fs: {Fs}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
+        f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     label_cols = json.loads(windowed_config['WINDOWED']['label_cols'].replace("'",'"') )
         
     #
@@ -382,7 +398,7 @@ def prepare_feature_data(
     amp_maxes = np.max(np.max(windowed_data, axis=2), axis=0)
     ## default value for entropy_tols
     if entropy_tols is None:
-        entropy_tols = 0.2*np.mean(np.std(windowed_data
+        entropy_tols = 0.5*np.mean(np.std(windowed_data
                 , axis=2), axis=0)
         logger.debug(f"inferred entropy_tols = {entropy_tols}")
     # creating a list of list of features, one list per window
@@ -415,16 +431,8 @@ def prepare_feature_data(
     # the columns of the new dataframe will include the label columns
     # and all the "new" feature columns
     all_columns = label_cols + feature_names
-    chunk_indices = np.linspace(0,len(features_lol),1001).astype(int)
-    chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
-    n_chunks = chunk_indices.size-1
-    for i, (start, end) in enumerate(tqdm(chunk_slices, total=n_chunks)):
-        if i == 0:
-            new_featured_df = pd.DataFrame(columns=all_columns)
-        if start != end:
-            new_featured_df = pd.concat(
-                (featured_df, pd.DataFrame(features_lol[start:end], columns=all_columns)),
-                ignore_index=True)
+    new_featured_df = pd.DataFrame(features_lol,columns=all_columns)
+    #
     if featured_df is None:
         featured_df = new_featured_df
     else:
@@ -438,10 +446,26 @@ def prepare_feature_data(
         old_feature_set = json.loads(
             featured_config['FEATURED']['feature_set'].replace("'",'"'))
         feature_set |= set(old_feature_set)
-        feature_names = old_feature_names + list(feature_names)
+        feature_names = set(old_feature_names) | set(feature_names)
+    # only now add hrv_rmssd if requested
+    if add_hrv_rmssd:
+        all_participants_events = load_event_info_from_csv(
+            participant_list)
+        insert_window_start_and_end_times(
+            all_participants_events, label_mapping, featured_df,
+            window_size, window_step, sample_rate)
+        update_df_with_rmssds(
+            featured_df, label_mapping, normed_rmssd=normed_rmssd)        
+        remove_window_start_and_end_times(
+            featured_df)
+        new_col = featured_df.columns[-1]
+        feature_set.add('HRVRMSSD')
+        feature_names.add(new_col)
+
+
     featured_config['FEATURED'] = {}
     featured_config['FEATURED']['feature_set'] = str(list(feature_set)).replace("'",'"')
-    featured_config['FEATURED']['feature_names'] = str(feature_names).replace("'",'"')
+    featured_config['FEATURED']['feature_names'] = str(list(feature_names)).replace("'",'"')
     # update featured_config with correct details
     # save down to file.
     write_dataframe_and_config(
@@ -506,7 +530,7 @@ def create_parser():
         '--lzc-type', default='casali',
         help="""The general algorithm for calculating LempelZiv Complexity""")
     parser.add_argument(
-        '--lzc-imp', default='flow',
+        '--lzc-imp', default='loop',
         help="""The specific implementation of LempelZiv Complexity type""")
     parser.add_argument(
         '-f', '--data-format', default='dreem', choices=['dreem','E4'])

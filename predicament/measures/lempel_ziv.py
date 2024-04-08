@@ -15,7 +15,7 @@ def contains(small, big):
     except ValueError:
         return False
 
-def lempel_ziv_casali(data):
+def lempel_ziv_casali_flow(data):
     """
     Checks the lempel Ziv complexity of a multi-channel time-series, by
     checking the channels in turn. Novel subsequences are only counted
@@ -27,6 +27,8 @@ def lempel_ziv_casali(data):
     data : a L1 x L2 2d array of data, with dtype=uint8, and where L1 is the
         time dimension (I think) while L2 is the number of channels
     """
+    raise NotImplementedError(
+        "There is an undiagonosed error in this implementation")
     L1, L2 = data.shape
     stop = False
     box = BoxLabel.A
@@ -137,7 +139,7 @@ def lempel_ziv_casali(data):
 # otherwise it is the full length of a previous column
 
 
-def lempel_ziv_casali_alt(data):
+def lempel_ziv_casali_loop(data):
     L1, L2 = data.shape
     complexity = 1
     for r in range(1, L2 + 1):

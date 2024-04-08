@@ -163,6 +163,13 @@ def get_window_start_times_for_participant(
         window_start_unixtimes[w] = window_start_unixtime
     return window_start_unixtimes
 
+def remove_window_start_and_end_times(datadf):
+    start_time_col = 'start time'
+    end_time_col = 'end time'
+    datadf.pop(start_time_col)
+    datadf.pop(end_time_col)
+    return datadf
+    
 def insert_window_start_and_end_times(
         all_participants_events, label_mapping, datadf,  window_size, window_step,
         sample_rate):

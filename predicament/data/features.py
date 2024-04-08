@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import pandas as pd
 import scipy.stats
 from strenum import StrEnum
 from itertools import combinations
@@ -9,11 +10,12 @@ import scipy.signal # using butter, lfilter
 from scipy.fft import fft, ifft
 # see https://github.com/Mottl/hurst
 from hurst import compute_Hc
+import re
+re_nonalpha = re.compile('[^a-zA-Z]')
 
 from predicament.measures.lempel_ziv import lempel_ziv_entropy
-from predicament.measures.lempel_ziv import lempel_ziv_casali
-from predicament.measures.lempel_ziv import lempel_ziv_casali_alt
-
+from predicament.measures.lempel_ziv import lempel_ziv_casali_flow
+from predicament.measures.lempel_ziv import lempel_ziv_casali_loop
 
 
 from statsmodels.tsa.ar_model import AutoReg # for Auto Regression (arCoeff) features
@@ -27,18 +29,28 @@ Feature = StrEnum(
 Features = set([f for f in Feature])
 MAXIMAL_FEATURE_GROUP = set([str(f) for f in Features])
 STATS_FEATURE_GROUP = set(
-    ['Mean', 'SD', 'MAD', 'Max', 'Min', 'Energy', 'IQR', 'Correlation'])
+    ['Mean', 'SD', 'MAD', 'Max', 'Min', 'IQR', 'Correlation'])
+    # 'Energy' excluded as very highly correlated with SD
 # Timings for 4 sec window on Care home data
 # SampleEntropy 5.5 hours (1.5 secs/it)
 # LempelZivEntropy ?? hours (3.25 secs/it)
 # LempelZivComplexity (flow) ?? hours (3.25 secs/it)
 # LempelZivComplexity (alt) ?? hours (3.25 secs/it)
 # arCoeff 5.5 minutes
+# Timings for 10 sec window on Care home data
+# SampleEntropy  hours ( secs/it)
+# LempelZivEntropy 21 hours (7.7 secs/it)
+# LempelZivComplexity ?? hours (2.13 it/secs)
 INFO_FEATURE_GROUP = set(
-    ['arCoeff',  'Hurst', 'LyapunovExponent', 'LempelZivEntropy']) # 
+    ['arCoeff',  'Hurst', 'LyapunovExponent', 'LempelZivEntropy', 'LempelZivComplexity','SampleEntropy']) # 
 FREQ_FEATURE_GROUP = set(
     ['MaxFreqInd', 'MeanFreq', 'FreqSkewness', 'FreqKurtosis']) #, 'EnergyBands'])
-SUPPORTED_FEATURE_GROUP = set(list(STATS_FEATURE_GROUP)+list(INFO_FEATURE_GROUP)+list(FREQ_FEATURE_GROUP))
+SUPPORTED_FEATURE_GROUP = set(
+    list(STATS_FEATURE_GROUP)+list(INFO_FEATURE_GROUP)+list(FREQ_FEATURE_GROUP)
+    + ['HRVRMSSD'])
+PROBLEMATIC_FEATURE_GROUP = set(
+    ['SampleEntropy','LempelZivEntropy', 'Energy'])
+IDEAL_FEATURE_GROUP = SUPPORTED_FEATURE_GROUP - PROBLEMATIC_FEATURE_GROUP
 
 
 def quantize_timeseries(seq, amp_min, amp_max, bits_per=8, binarize=True):
@@ -170,14 +182,17 @@ def convert_timeseries_to_features(
         X, feature_set,
         entropy_embed_dim=2, entropy_tol=None, entropy_tols=None,
         auto_reg_order=3, bits_per=1, lzc_type=None, lzc_imp=None,
+        sament_imp=None,
         amp_means=None, amp_maxes=None, amp_mins=None,
-        hurst_kind='price', hurst_simplified=True):
+        hurst_kind='price', hurst_simplified=False):
     """
     parameters
     ----------
     X - time-series.    Assumes X is 2d np.array CxT, where C is channels and T is time-points 
     feature_set - set of features to use. Can be set of strings or set of Feature enum types.
     bits_per - when quantizing the data for LempelZiv calculations, we set how many bits to encode each per channel sample. 
+    lzc_imp - which implementation of LempelZivComplexity to use
+    sament_imp - which implementation of SampleEntroy to use
     """
     for f in feature_set:
         if f not in Features:
@@ -239,7 +254,7 @@ def convert_timeseries_to_features(
         # see: https://www.mdpi.com/1099-4300/20/10/764
         # entropy_tol guidance is to use 0.05*(np.mean(np.std(X,axis=1)))
         if entropy_tols is None:
-            entropy_tols = np.ones(X.shape[0])*entropy_tol            
+            entropy_tols = np.ones(X.shape[0])*entropy_tol
 ##        entropies = [
 ##            sample_entropy(list(ts), entropy_embed_dim, e_tol) for e_tol, ts in zip(entropy_tols,X)]
         entropies = sample_entropy_stack(X, entropy_embed_dim, entropy_tols)
@@ -302,11 +317,10 @@ def convert_timeseries_to_features(
 #        quantized = quantize_data(X)
         if lzc_type == 'casali': 
             if lzc_imp == 'flow':
-                lzc = lempel_ziv_casali(Q.T)
-                feature_names += [f'LempelZivComplexity[b={bits_per}]' ] 
-            elif lzc_imp == 'alt':
-                lzc = lempel_ziv_casali_alt(Q.T)
-                feature_names += [f'LempelZivComplexityAlt[b={bits_per}]' ] 
+                lzc = lempel_ziv_casali_flow(Q.T)
+            elif lzc_imp == 'loop':
+                lzc = lempel_ziv_casali_loop(Q.T)
+            feature_names += [f'LempelZivComplexity[b={bits_per}]' ] 
             features = np.concatenate([features, [lzc]])
         else:
             raise ValueError(f'Unrecognised LempelZivComplexity type {lzc_type}')
@@ -399,8 +413,24 @@ def add_features_to_dataframe(
         c for c in left_cols if (c in merge_on) or (not c in right_cols) ]
     # hide the columns that will be overridden
     existing_df = existing_df.loc[:,preserved_left_cols]
-    result_df = pd.merge(existing_df, new_df, how='inner')
+    result_df = pd.merge(existing_df, new_df, how='inner', on=merge_on)
     if len(existing_df.index) != len(result_df.index):
         raise ValueError('Cannot merge as rows do not coincide')
     return result_df
 
+
+# re_nonalpha = re.compile('[^a-zA-Z]')
+# feature_types = [(name,re_nonalpha.sub('', name)) for name in feature_names]
+# print(f"feature_types = {feature_types}")
+
+def filter_features(feature_names, type_set):
+#    return [
+#        name for name in feature_names if re_nonalpha.sub('', name) in type_set]
+    filtered = [
+        name for name in feature_names if re_nonalpha.split(name)[0] in type_set]
+    filtered.sort()
+    return filtered
+    #
+#    for name in feature_names:
+#        stem  name.split('[')[0].split('_')[0]
+            
