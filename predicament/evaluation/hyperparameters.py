@@ -89,11 +89,13 @@ BAYESOPT_SEARCH_SPACES[type(SVC())] = dict(
 # Random Forest Classifer
 BAYESOPT_SEARCH_SPACES[type(RandomForestClassifier())] = dict(
         # Number of trees in random forest
-        n_estimators = Integer(10,2000, prior='log-uniform'),
+        n_estimators = Integer(10,1000, prior='log-uniform'),
         # Number of features to consider at every split
         max_features = Categorical(['log2', 'sqrt']),
+        # function to measure the quality of a split
+        criterion = Categorical(['gini', 'entropy', 'log_loss']),
         # Maximum number of levels in tree
-        max_depth = Integer(1, 200,  prior='log-uniform'),
+        max_depth = Integer(1, 50,  prior='log-uniform'),
         # Minimum number of samples required at each leaf node
         min_samples_leaf = Real(1e-4, 1e-2, prior='log-uniform'),
         # Method of selecting samples for training each tree
@@ -129,8 +131,11 @@ BAYESOPT_SEARCH_SPACES[type(GradientBoostingClassifier())] =  {
     'min_samples_split': Integer(2, 20),
     'min_samples_leaf': Integer(1, 20),
     'subsample': Real(0.5, 1.0, prior='uniform'),
-    'max_features': Categorical(['auto', 'sqrt', 'log2', None]),
-    'loss': Categorical(['deviance', 'exponential']),
+    # alternative for max features
+    #'max_features': Categorical(['sqrt', 'log2', None]),
+    'max_features': Real(1e-3, 1.0, prior='log-uniform'),
+    # exponential loss only good for binary
+#    'loss': Categorical(['log_loss', 'exponential']),
 }
 
 RANDSEARCH_DISTRIBUTIONS  = {}

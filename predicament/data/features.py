@@ -48,8 +48,11 @@ FREQ_FEATURE_GROUP = set(
 SUPPORTED_FEATURE_GROUP = set(
     list(STATS_FEATURE_GROUP)+list(INFO_FEATURE_GROUP)+list(FREQ_FEATURE_GROUP)
     + ['HRVRMSSD'])
-PROBLEMATIC_FEATURE_GROUP = set(
-    ['SampleEntropy','LempelZivEntropy', 'Energy'])
+PROBLEMATIC_FEATURE_GROUP = set([
+#    'SampleEntropy',
+    'LempelZivEntropy', # LempelZivEntropy expensive and may not add much
+    'Energy', # Energy highly correlated with SD 
+    'FreqSkewness']) # FreqSkewness highly correlated with MeanFreq
 IDEAL_FEATURE_GROUP = SUPPORTED_FEATURE_GROUP - PROBLEMATIC_FEATURE_GROUP
 
 

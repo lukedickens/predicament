@@ -11,10 +11,12 @@ import random
 import time
 import os
 import pandas as pd
+import numpy as np
 import configparser
 
 from predicament.utils.config import CROSS_VALIDATION_BASE_PATH
-
+from predicament.utils.config_parser import config_to_dict
+from predicament.utils.config_parser import dict_to_config
 
 def local2unix(datetime):
     """
@@ -71,6 +73,8 @@ def get_evaluation_datadir(n_classes, func):
 
 def write_dataframe_and_config(
         dir_path, data, config, data_fname, config_fname='details.cfg'):
+    if type(config) is dict:
+        config = dict_to_config(config)
     data_path = os.path.join(dir_path, data_fname)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -97,17 +101,36 @@ def write_dataframe_and_config(
         config.write(config_file)
 
 def load_dataframe_and_config(
-        dir_path, data_fname, config_fname='details.cfg', **readargs):
-#    print(f"dir_path = {dir_path}")
-#    print(f"data_fname = {data_fname}")
+        dir_path, data_fname, config_fname='details.cfg', 
+        drop_inf='cols', **readargs):
     data_path = os.path.join(dir_path, data_fname)
+    print(f"Reading dataframe from {data_path}")
     data = pd.read_csv(data_path, index_col=0,  **readargs)
     config_path = os.path.join(dir_path, config_fname)
+    print(f"Reading config from {config_path}")
     config = configparser.ConfigParser()
     with open(config_path, 'r') as config_file:
         config.read_file(config_file)
-    return data, config
+    # convert config to dictionary
+    dict_config =  config_to_dict(config)
+    if drop_inf=='cols':
+        data, removed_columns = drop_inf_cols(data)
+        dict_config['FEATURED']['removed_features'] = removed_columns
+        feature_names = dict_config['FEATURED']['feature_names']
+        dict_config['FEATURED']['feature_names'] = [
+            f for f in feature_names if not f in removed_columns]
+    elif not drop_inf:
+        pass
+    else:
+        raise ValueError(f"Unrecognised value for drop_inf of {drop_inf}")
+    return data, dict_config
 
-
+def drop_inf_cols(df):
+    removed_columns = []
+    for col in df.select_dtypes(include=[np.number]).columns:
+        if np.any(np.isinf(df[col])):
+            removed_columns.append(col)
+            del df[col]
+    return df, removed_columns
 # _test_local2unix()
 # _test_unix2local()

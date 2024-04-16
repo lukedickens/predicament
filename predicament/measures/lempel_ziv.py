@@ -192,5 +192,25 @@ def lempel_ziv_entropy(l):
 
     ae = 1 / (sum_gamma / n) * math.log(n)
     return ae
+
+
+## alternative implementation, but it has problems
+#def lempel_ziv_entropy(l):
+#    """
+#    input
+#    -----
+#    l - a 1d numpy timeseries array with dtype=bool
+#    """
+#    n = len(l)
+#    sum_gamma = 0
+#    for i in range(1, n):
+#        sequences = np.split(l[:i], np.where(np.diff(l[:i]))[0]+1)
+#        sequence_lengths = [len(seq) for seq in sequences]
+#        max_sequence_length = max(sequence_lengths)
+#        sum_gamma += max_sequence_length
+#    ae = 1 / (sum_gamma / n) * np.log(n)
+#    return ae
+    
 ## End of Lempel-Ziv entropy estimator
+
 

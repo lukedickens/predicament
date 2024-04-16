@@ -4,6 +4,19 @@ import re
 
 from predicament.data.features import SUPPORTED_FEATURE_GROUP
 
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+
+from predicament.models.mlp_wrappers import ThreeHiddenLayerClassifier
+
+SKLEARN_MODEL_CONSTRUCTORS = dict(
+    RandomForestClassifier=RandomForestClassifier,
+    MLPClassifier=MLPClassifier,
+    SVC=SVC,
+    ThreeHiddenLayerClassifier=ThreeHiddenLayerClassifier)
+
+
 def get_design_matrix(data_df, feature_types=None, fragile=True):
     # you can choose a subset of the feature types to use
     if feature_types is None:
@@ -24,3 +37,6 @@ def get_design_matrix(data_df, feature_types=None, fragile=True):
                     f"You have requested feature type {feature_type} but it is not found in the data.")
     designmtx = data_df[feature_names].to_numpy()
     return feature_types, feature_names, designmtx
+    
+def get_estimator(model_name, **modelargs):
+    return SKLEARN_MODEL_CONSTRUCTORS[model_name](**model_args)

@@ -318,11 +318,11 @@ def consolidate_windowed_data(
 
     # prepare and save down time-series
     data_by_participant, config = load_and_window_participant_data(**loadargs)
-    n_channels = int(config['LOAD']['n_channels'])
-    channels = json.loads(config['LOAD']['channels'].replace("'",'"'))
-    participant_list = json.loads(config['LOAD']['participant_list'].replace("'",'"'))
-    sample_rate = int(config['LOAD']['sample_rate'])
-    window_size = int(config['LOAD']['window_size'])
+    n_channels = config['LOAD']['n_channels']
+    channels = config['LOAD']['channels']
+    participant_list = config['LOAD']['participant_list']
+    sample_rate = config['LOAD']['sample_rate']
+    window_size = config['LOAD']['window_size']
     time = window_size/sample_rate
     logger.info(f"Loaded participant-wise data")
     logger.info(f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
@@ -368,19 +368,18 @@ def prepare_feature_data(
     windowed_parent_path = get_parent_path('windowed', subdir)
     logger.info("Loading windowed data")
     windowed_df, windowed_config = load_dataframe_and_config(
-        windowed_parent_path, windowed_fname)
+        windowed_parent_path, windowed_fname, drop_inf=False)
     n_channels = int(windowed_config['LOAD']['n_channels'])
-    label_mapping = json.loads(
-        windowed_config['LOAD']['label_mapping'].replace("'",'"'))
-    channels = json.loads(windowed_config['LOAD']['channels'].replace("'",'"'))
-    participant_list = json.loads(windowed_config['LOAD']['participant_list'].replace("'",'"'))
-    sample_rate = int(windowed_config['LOAD']['sample_rate'])
-    window_size = int(windowed_config['LOAD']['window_size'])
-    window_step = int(windowed_config['LOAD']['window_step'])
+    label_mapping = windowed_config['LOAD']['label_mapping']
+    channels = windowed_config['LOAD']['channels']
+    participant_list = windowed_config['LOAD']['participant_list']
+    sample_rate = windowed_config['LOAD']['sample_rate']
+    window_size = windowed_config['LOAD']['window_size']
+    window_step = windowed_config['LOAD']['window_step']
     time = window_size/sample_rate
     logger.info(
         f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
-    label_cols = json.loads(windowed_config['WINDOWED']['label_cols'].replace("'",'"') )
+    label_cols = windowed_config['WINDOWED']['label_cols']
         
     #
     timeseries_cols = [col for col in windowed_df.columns if not col in label_cols ]
@@ -441,10 +440,8 @@ def prepare_feature_data(
         featured_df = add_features_to_dataframe(
             featured_df, new_featured_df, label_cols)
         # incorporate pre-existing feature names and feature_set in config
-        old_feature_names = json.loads(
-            featured_config['FEATURED']['feature_names'].replace("'",'"'))
-        old_feature_set = json.loads(
-            featured_config['FEATURED']['feature_set'].replace("'",'"'))
+        old_feature_names = featured_config['FEATURED']['feature_names']
+        old_feature_set = featured_config['FEATURED']['feature_set']
         feature_set |= set(old_feature_set)
         feature_names = set(old_feature_names) | set(feature_names)
     # only now add hrv_rmssd if requested
@@ -462,10 +459,9 @@ def prepare_feature_data(
         feature_set.add('HRVRMSSD')
         feature_names.add(new_col)
 
-
     featured_config['FEATURED'] = {}
-    featured_config['FEATURED']['feature_set'] = str(list(feature_set)).replace("'",'"')
-    featured_config['FEATURED']['feature_names'] = str(list(feature_names)).replace("'",'"')
+    featured_config['FEATURED']['feature_set'] = list(feature_set)
+    featured_config['FEATURED']['feature_names'] = list(feature_names)
     # update featured_config with correct details
     # save down to file.
     write_dataframe_and_config(
