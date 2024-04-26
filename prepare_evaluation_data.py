@@ -37,6 +37,7 @@ logger.addHandler(console_handler)
 # import data_setup
 from predicament.utils.file_utils import load_dataframe_and_config
 from predicament.utils.file_utils import write_dataframe_and_config
+from predicament.utils.file_utils import config_to_dict
 from predicament.utils.config import DREEM_EEG_CHANNELS, DREEM_MINIMAL_CHANNELS
 from predicament.utils.config import DREEM_INFORMING_CHANNELS
 from predicament.utils.config import TARGET_CONDITIONS
@@ -190,7 +191,7 @@ def load_and_window_participant_data(
     loadargs = { k:str(v) for k, v in loadargs.items()}
     logger.debug(f"loadargs = {loadargs}")
     config['LOAD'] = loadargs        
-    return data_by_participant, config
+    return data_by_participant, config_to_dict(config)
     
     
 def iterate_between_subject_cv_partition(**loadargs):
@@ -252,15 +253,19 @@ def prepare_between_subject_cv_partition_files(**loadargs):
 
 def write_data_by_participant_to_dataframe(
         data_by_participant, channels, window_size):
+    logger.debug(f"channels = {channels}")
     timepoints = np.arange(window_size)
+    logger.debug(f"timepoints = {timepoints}")
     label_cols = ['participant', 'condition', 'window index']
     window_columns = [ ch+f'[{t}]' for ch in channels for t in timepoints]
+    logger.debug(f"[ (ch,t) for ch in channels for t in timepoints] = {[ (ch,t) for ch in channels for t in timepoints]}")
     # get windows and condition labels as two np arrays
     # stacked in participant order 
     windows_np, condition_labels_np = map(
         np.concatenate, 
         zip(*data_by_participant.values()))
     # windows and condition labels as dataframe and series object resp.
+    logger.debug(f"window_columns = {window_columns}")
     windows = pd.DataFrame(windows_np, columns=window_columns)
     # to produce column of participant labels first we need to know how many
     # windows for each participant
@@ -470,7 +475,9 @@ def prepare_feature_data(
 
 
 
-def main(mode=None, within_or_between='between', **kwargs):
+def main(participants=None, mode=None, within_or_between='between', **kwargs):
+    if not participants is None:
+        kwargs['participant_list'] = participants.split(',')
     if mode == 'cross_validation':
         if within_or_between=='between':
             prepare_between_subject_cv_partition_files(**kwargs)
@@ -516,6 +523,9 @@ def create_parser():
     parser.add_argument(
         '--feature-group', default='supported',
         help="""Predefined group of features to use""")
+    parser.add_argument(
+        '--participants',
+        help="""Specify participants to include""")
     parser.add_argument(
         '--feature-set',
         help="""Specify feature types as comma separated string""")

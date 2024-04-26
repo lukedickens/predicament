@@ -14,6 +14,9 @@ import pandas as pd
 import numpy as np
 import configparser
 
+from predicament.utils.config import WINDOWED_BASE_PATH
+from predicament.utils.config import FEATURED_BASE_PATH
+
 from predicament.utils.config import CROSS_VALIDATION_BASE_PATH
 from predicament.utils.config_parser import config_to_dict
 from predicament.utils.config_parser import dict_to_config
@@ -100,6 +103,12 @@ def write_dataframe_and_config(
     with open(config_path, 'w') as config_file:
         config.write(config_file)
 
+def load_windowed_data_and_config(subdir, drop_inf=None, **kwargs):
+    data_dir = os.path.join(WINDOWED_BASE_PATH,subdir)
+    df, config = load_dataframe_and_config(
+        data_dir, 'windowed.csv', drop_inf=drop_inf, **kwargs)
+    return df, config    
+    
 def load_dataframe_and_config(
         dir_path, data_fname, config_fname='details.cfg', 
         drop_inf='cols', **readargs):
