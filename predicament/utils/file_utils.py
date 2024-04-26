@@ -132,5 +132,14 @@ def drop_inf_cols(df):
             removed_columns.append(col)
             del df[col]
     return df, removed_columns
+
+def drop_nan_cols(df):
+    removed_columns = []
+    for col in df.select_dtypes(include=[np.number]).columns:
+        if np.any(np.isnan(df[col])):
+            removed_columns.append(col)
+            del df[col]
+    return df, removed_columns
+
 # _test_local2unix()
 # _test_unix2local()
