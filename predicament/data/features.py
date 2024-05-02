@@ -14,6 +14,7 @@ import re
 re_nonalpha = re.compile('[^a-zA-Z]')
 
 from predicament.measures.lempel_ziv import lempel_ziv_entropy
+from predicament.measures.lempel_ziv import lempel_ziv_entropy_numpy
 from predicament.measures.lempel_ziv import lempel_ziv_casali_flow
 from predicament.measures.lempel_ziv import lempel_ziv_casali_loop
 
@@ -185,7 +186,7 @@ def convert_timeseries_to_features(
         X, feature_set,
         entropy_embed_dim=2, entropy_tol=None, entropy_tols=None,
         auto_reg_order=3, bits_per=1, lzc_type=None, lzc_imp=None,
-        sament_imp=None,
+        lze_imp=None, sament_imp=None,
         amp_means=None, amp_maxes=None, amp_mins=None,
         hurst_kind='price', hurst_simplified=False):
     """
@@ -309,8 +310,12 @@ def convert_timeseries_to_features(
         Q = quantize_multichannel(
             X, amp_mins, amp_maxes, bits_per=bits_per, binarize=True)
         lempel_ziv_entropies = np.empty(C)
-        for c, ts in enumerate(Q):
-            lempel_ziv_entropies[c] = lempel_ziv_entropy(ts)
+        if (lze_imp is None) or (lze_imp == 'seq'):
+            for c, ts in enumerate(Q):
+                lempel_ziv_entropies[c] = lempel_ziv_entropy(ts)
+        elif (lze_imp == 'numpy'):
+            for c, ts in enumerate(Q):
+                lempel_ziv_entropies[c] = lempel_ziv_entropy_numpy(ts)
         features = np.concatenate([features, lempel_ziv_entropies])
         feature_names += [f'LempelZivEntropy[b={bits_per}][{d}]' for d in range(lempel_ziv_entropies.size)]
     if Feature.LempelZivComplexity in feature_set: 
@@ -437,3 +442,23 @@ def filter_features(feature_names, type_set):
 #    for name in feature_names:
 #        stem  name.split('[')[0].split('_')[0]
             
+def derive_feature_types(feature_names, feature_set, label_cols=None):
+    if label_cols is None:
+        label_cols  =  ["participant", "condition", "window index"]
+    derived_feature_names = []
+    derived_feature_types = set([])
+    for f in feature_names:
+        if f in label_cols:
+            continue
+        elif (f[-1] == ']'):
+            if (f[:-1].rstrip('0123456789')[-1] == '['):
+                f = f[:-1].rstrip('0123456789')[:-1]
+        else:
+            f = f.rstrip('0123456789')
+        for type_ in feature_set:
+            if f.startswith(type_):
+                derived_feature_types.add(f)
+                break
+    derived_feature_types = list(derived_feature_types)
+    derived_feature_types.sort()
+    return derived_feature_types

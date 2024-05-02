@@ -108,7 +108,7 @@ def resolve_participant_data_settings(
             else:
                 raise ValueError(f"Unrecognised channel group {channel_group}")
         elif type(channels) is str:
-            channels = get_channels_from_string(channels)
+            channels = get_list_from_string(channels)
         else:
             channels = list(channels)
         if window_size is None:
@@ -122,7 +122,7 @@ def resolve_participant_data_settings(
             else:
                 raise ValueError("Unrecognised channel group")
         elif type(channels) is str:
-            channels = get_channels_from_string(channels)
+            channels = get_list_from_string(channels)
         else:
             channels = list(channels)
         if window_size is None:
@@ -132,11 +132,20 @@ def resolve_participant_data_settings(
     if window_step is None:
         window_step = window_size//DEFAULT_WINDOW_OVERLAP_FACTOR
     return participant_list, channels, window_size, window_step
-    
-def get_channels_from_string(channels_as_str):
-    channels = channels_as_str.split(',')
-    return channels
 
+
+def get_dict_of_lists_from_dict_of_strings(dict_, sep=','):
+    return {
+        k:get_list_from_string(v,sep=sep) for k,v in dict_.items() }    
+
+def get_dict_from_string(string_, kvsep=':', entrysep=';'):
+    dict_ = dict([
+        tuple(entry.split(kvsep)) for entry in get_list_from_string(string_, sep=entrysep)])
+    return dict_
+
+def get_list_from_string(string_, sep=','):
+    list_ = string_.split(sep)
+    return list_
 
 def load_and_window_participant_data(
         participant_list=None,
@@ -162,6 +171,11 @@ def load_and_window_participant_data(
         the start of the (i+1)th
     kwargs -
         input args that will be ignored [unsafe] TODO: make safe
+    returns
+    -------
+    data_by_participant
+    config_dict
+    
     """
     participant_list, channels, window_size, window_step = resolve_participant_data_settings(
         data_format, participant_list, channel_group, channels, window_size, window_step)
@@ -226,7 +240,7 @@ def prepare_between_subject_cv_partition_files(**loadargs):
         fold_path = os.path.join(parent_path, f'fold{f}')
         if not os.path.exists(fold_path):
             os.makedirs(fold_path)
-        print(f"Saving fold {f} data in {fold_path} with {n_train} train and {n_test} test points")
+        logger.info(f"Saving fold {f} data in {fold_path} with {n_train} train and {n_test} test points")
         # reshape label arrays
         trn_lab = np.reshape(trn_lab, (-1,1))
         tst_lab = np.reshape(tst_lab, (-1,1))
@@ -258,7 +272,7 @@ def write_data_by_participant_to_dataframe(
     logger.debug(f"timepoints = {timepoints}")
     label_cols = ['participant', 'condition', 'window index']
     window_columns = [ ch+f'[{t}]' for ch in channels for t in timepoints]
-    logger.debug(f"[ (ch,t) for ch in channels for t in timepoints] = {[ (ch,t) for ch in channels for t in timepoints]}")
+#    logger.debug(f"[ (ch,t) for ch in channels for t in timepoints] = {[ (ch,t) for ch in channels for t in timepoints]}")
     # get windows and condition labels as two np arrays
     # stacked in participant order 
     windows_np, condition_labels_np = map(
@@ -277,6 +291,7 @@ def write_data_by_participant_to_dataframe(
     participant_condition_labels = pd.DataFrame(
         np.vstack((participant_labels_np, condition_labels_np.astype(int))).T,
         columns=('participant','condition') )
+    participant_condition_labels['condition'] = participant_condition_labels['condition'].astype(int)
     # the participant labels then provide the window indices with the
     # groupby...cumcount combined call
     window_indices = participant_condition_labels.groupby(
@@ -315,8 +330,16 @@ def write_data_by_participant_to_dataframe(
 
     
 def consolidate_windowed_data(
+        condition_groups=None, 
         parent_path=WINDOWED_BASE_PATH, subdir=None,
         windowed_fname='windowed.csv', **loadargs):
+    """
+    Loads participant data from files converts, then creates a datafrmae
+    of the data using sliding window approach, finally saving this down to file.
+    
+     
+    """
+            
     # can specify the sub directory otherwise a datetime-string is created
     if subdir is None:
         subdir = get_datetime_string()
@@ -340,13 +363,40 @@ def consolidate_windowed_data(
     config['WINDOWED']['group_col'] = 'participant'
     config['WINDOWED']['target_col'] = 'condition'
     config['WINDOWED']['label_cols'] = str(label_cols).replace("'",'"')
+    # group conditions if required
+    if not condition_groups is None:
+        timeseries_df, config = group_conditions(
+            timeseries_df, config, "condition", condition_groups)
+
     write_dataframe_and_config(
         windowed_dir_path, timeseries_df, config, windowed_fname)
+
+
+def group_conditions(df, config, condition_col, condition_groups):
+    if type(condition_groups) is str:
+        condition_groups = get_dict_from_string(condition_groups)
+        condition_groups = get_dict_of_lists_from_dict_of_strings(
+            condition_groups)
+    new_label_mapping = list(condition_groups.keys())
+    new_label_mapping.sort()
+    old_label_mapping = config['LOAD']['label_mapping']
+    condition_series = df[condition_col]
+    old_to_new = {}
+    for new_c, new_condition in enumerate(new_label_mapping):
+        group = condition_groups[new_condition]
+        for old_c, old_condition in enumerate(old_label_mapping):
+            if old_condition in group:
+                old_to_new[old_c] = new_c
+    condition_series = condition_series.map(old_to_new)
+    df[condition_col] = condition_series
+    config['LOAD']['label_groups'] = condition_groups
+    config['LOAD']['label_mapping'] = new_label_mapping
+    return df, config
 
 def prepare_feature_data(
         subdir, windowed_fname='windowed.csv', featured_fname='featured.csv',
         feature_set=None, feature_group=None,
-        bits_per=1, lzc_type=None, lzc_imp=None,
+        bits_per=1, lzc_type=None, lzc_imp=None, lze_imp=None,
         entropy_tols=None, hurst_kind='random_walk',
         normed_rmssd=True, **kwargs):
     if feature_set is None:
@@ -361,7 +411,7 @@ def prepare_feature_data(
         else:
             raise ValueError(f'Unrecognised feature group {feature_group}')
     else:
-        feature_set = set(feature_set.split(','))
+        feature_set = get_list_from_string(feature_set)
         if len(feature_set) == 0:
             raise ValueError('')
     if 'HRVRMSSD' in feature_set:
@@ -416,6 +466,7 @@ def prepare_feature_data(
             X, feature_set,
             amp_means=amp_means, amp_mins=amp_mins, amp_maxes=amp_maxes,
             bits_per=bits_per, lzc_type=lzc_type, lzc_imp=lzc_imp,
+            lze_imp=lze_imp,
             entropy_tols=entropy_tols, hurst_kind=hurst_kind)
         features_lol.append(        
                 label_row + list(features))
@@ -475,16 +526,18 @@ def prepare_feature_data(
 
 
 
-def main(participants=None, mode=None, within_or_between='between', **kwargs):
+def main(conditions=None, participants=None, group_conditions=None, mode=None, within_or_between='between', **kwargs):
     if not participants is None:
-        kwargs['participant_list'] = participants.split(',')
+        kwargs['participant_list'] = get_list_from_string(participants)
+    if not conditions is None:
+        kwargs['conditions'] = get_list_from_string(conditions)
     if mode == 'cross_validation':
         if within_or_between=='between':
             prepare_between_subject_cv_partition_files(**kwargs)
         elif within_or_between=='within':
             raise NotImplementedError('Within partition not yet implemented')
     elif mode == 'windowed':
-        consolidate_windowed_data(**kwargs)
+        consolidate_windowed_data(group_conditions=group_conditions, **kwargs)
     elif mode == 'featured':
         prepare_feature_data(**kwargs)
     else:
@@ -527,6 +580,13 @@ def create_parser():
         '--participants',
         help="""Specify participants to include""")
     parser.add_argument(
+        '--conditions',
+        help="""Specify conditions to include""")
+    parser.add_argument(
+        '--condition-groups',
+        help="""Group conditions into meta-conditions""")
+
+    parser.add_argument(
         '--feature-set',
         help="""Specify feature types as comma separated string""")
     parser.add_argument(
@@ -538,6 +598,9 @@ def create_parser():
     parser.add_argument(
         '--lzc-imp', default='loop',
         help="""The specific implementation of LempelZiv Complexity type""")
+    parser.add_argument(
+        '--lze-imp', default='seq',
+        help="""The specific implementation of LempelZiv Entropy type""")
     parser.add_argument(
         '-f', '--data-format', default='dreem', choices=['dreem','E4'])
     parser.add_argument(

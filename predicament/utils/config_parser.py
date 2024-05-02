@@ -28,7 +28,9 @@ COMPLEX_ELEMENTS = {}
 COMPLEX_ELEMENTS['LOAD'] = [
     "participant_list",
     "conditions",
-    "channels", "label_mapping"]
+    "channels", 
+    "label_mapping",
+    "label_groups"]
 COMPLEX_ELEMENTS['WINDOWED'] = [
     'label_cols']
 COMPLEX_ELEMENTS['FEATURED'] = [
