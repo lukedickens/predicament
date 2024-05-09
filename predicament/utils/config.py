@@ -6,6 +6,16 @@ Created on Wed Jun 29 23:59:34 2022
 
 """
 import os
+
+## Move all the path management stuff to predicament.utils.path_utils.
+def establish_path(base_path, subdirectory):
+    full_path = os.path.join(base_path, subdirectory)
+    if not os.path.exists(full_path):
+        print(
+            f"Creating dir at:\n\t{full_path}")
+        os.makedirs(full_path)
+    return full_path    
+
 BASE_DATA_FOLDER = os.environ.get('PREDICAMENT_DATA_DIR', 'data')
 STUDY_DATA_FOLDER = os.path.join(BASE_DATA_FOLDER, r'CARE_HOME_DATA') +'/'
 EVENT_DETAILS_PATH = os.path.join(STUDY_DATA_FOLDER, './event_details.csv')
@@ -20,28 +30,32 @@ if not os.path.exists(CROSS_VALIDATION_BASE_PATH):
     os.makedirs(CROSS_VALIDATION_BASE_PATH)
 # for windowed data
 WINDOWED_BASE_SUBDIR = 'windowed'
-WINDOWED_BASE_PATH = os.path.join(
-    BASE_DATA_FOLDER, WINDOWED_BASE_SUBDIR)
-if not os.path.exists(WINDOWED_BASE_PATH):
-    print(
-        f"Creating windowed data base dir at:\n\t{WINDOWED_BASE_PATH}")
-    os.makedirs(WINDOWED_BASE_PATH)
+WINDOWED_BASE_PATH = establish_path(BASE_DATA_FOLDER, WINDOWED_BASE_SUBDIR)
+#WINDOWED_BASE_PATH = os.path.join(
+#    BASE_DATA_FOLDER, WINDOWED_BASE_SUBDIR)
+#if not os.path.exists(WINDOWED_BASE_PATH):
+#    print(
+#        f"Creating windowed data base dir at:\n\t{WINDOWED_BASE_PATH}")
+#    os.makedirs(WINDOWED_BASE_PATH)
 # for feature vector data
 FEATURED_BASE_SUBDIR = 'featured'
-FEATURED_BASE_PATH = os.path.join(
-    BASE_DATA_FOLDER, FEATURED_BASE_SUBDIR)
-if not os.path.exists(FEATURED_BASE_PATH):
-    print(
-        f"Creating featured data base dir at:\n\t{FEATURED_BASE_PATH}")
-    os.makedirs(FEATURED_BASE_PATH)
+FEATURED_BASE_PATH = establish_path(BASE_DATA_FOLDER, FEATURED_BASE_SUBDIR)
+#FEATURED_BASE_PATH = os.path.join(
+#    BASE_DATA_FOLDER, FEATURED_BASE_SUBDIR)
+#if not os.path.exists(FEATURED_BASE_PATH):
+#    print(
+#        f"Creating featured data base dir at:\n\t{FEATURED_BASE_PATH}")
+#    os.makedirs(FEATURED_BASE_PATH)
 # results
 RESULTS_BASE_SUBDIR = 'results'
-RESULTS_BASE_PATH = os.path.join(
-    BASE_DATA_FOLDER, RESULTS_BASE_SUBDIR)
-if not os.path.exists(RESULTS_BASE_PATH):
-    print(
-        f"Creating results base dir at:\n\t{RESULTS_BASE_PATH}")
-    os.makedirs(RESULTS_BASE_PATH)
+RESULTS_BASE_PATH = establish_path(BASE_DATA_FOLDER, RESULTS_BASE_SUBDIR)
+#RESULTS_BASE_PATH = os.path.join(
+#    BASE_DATA_FOLDER, RESULTS_BASE_SUBDIR)
+#if not os.path.exists(RESULTS_BASE_PATH):
+#    print(
+#        f"Creating results base dir at:\n\t{RESULTS_BASE_PATH}")
+#    os.makedirs(RESULTS_BASE_PATH)
+
 
 
 #TODO needs renaming

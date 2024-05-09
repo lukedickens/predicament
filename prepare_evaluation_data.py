@@ -15,18 +15,19 @@ import configparser
 import json
 from tqdm import tqdm
 import copy
+# logging
 import logging
 import logging.handlers
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
+#
 # always write everything to the rotating log files
 if not os.path.exists('logs'): os.mkdir('logs')
 log_file_handler = logging.handlers.TimedRotatingFileHandler('logs/args.log', when='M', interval=2)
 log_file_handler.setFormatter( logging.Formatter('%(asctime)s [%(levelname)s](%(name)s:%(funcName)s:%(lineno)d): %(message)s') )
 log_file_handler.setLevel(logging.DEBUG)
 logger.addHandler(log_file_handler)
-
+#
 # also log to the console at a level determined by the --verbose flag
 console_handler = logging.StreamHandler() # sys.stderr
 console_handler.setLevel(logging.CRITICAL) # set later by set_log_level_from_verbose() in interactive sessions
@@ -37,6 +38,11 @@ logger.addHandler(console_handler)
 # import data_setup
 from predicament.utils.file_utils import load_dataframe_and_config
 from predicament.utils.file_utils import write_dataframe_and_config
+from predicament.utils.file_utils import write_windowed_dataframe_and_config
+from predicament.utils.file_utils import write_featured_dataframe_and_config
+from predicament.utils.file_utils import load_windowed_dataframe_and_config
+from predicament.utils.file_utils import load_featured_dataframe_and_config
+
 from predicament.utils.file_utils import config_to_dict
 from predicament.utils.config import DREEM_EEG_CHANNELS, DREEM_MINIMAL_CHANNELS
 from predicament.utils.config import DREEM_INFORMING_CHANNELS
@@ -63,6 +69,7 @@ from predicament.data.features import MAXIMAL_FEATURE_GROUP
 from predicament.data.features import STATS_FEATURE_GROUP
 from predicament.data.features import INFO_FEATURE_GROUP
 from predicament.data.features import FREQ_FEATURE_GROUP
+from predicament.data.features import IDEAL_FEATURE_GROUP
 from predicament.data.features import SUPPORTED_FEATURE_GROUP
 from predicament.data.features import convert_timeseries_to_features
 from predicament.data.features import add_features_to_dataframe
@@ -365,14 +372,14 @@ def consolidate_windowed_data(
     config['WINDOWED']['label_cols'] = str(label_cols).replace("'",'"')
     # group conditions if required
     if not condition_groups is None:
-        timeseries_df, config = group_conditions(
-            timeseries_df, config, "condition", condition_groups)
+        timeseries_df, config = apply_group_conditions(
+            timeseries_df, config, "condition", condition_groups, "window index")
 
-    write_dataframe_and_config(
-        windowed_dir_path, timeseries_df, config, windowed_fname)
+    write_windowed_dataframe_and_config(
+        subdir, timeseries_df, config, windowed_fname)
 
 
-def group_conditions(df, config, condition_col, condition_groups):
+def apply_group_conditions(df, config, condition_col, condition_groups, index_col):
     if type(condition_groups) is str:
         condition_groups = get_dict_from_string(condition_groups)
         condition_groups = get_dict_of_lists_from_dict_of_strings(
@@ -387,6 +394,9 @@ def group_conditions(df, config, condition_col, condition_groups):
         for old_c, old_condition in enumerate(old_label_mapping):
             if old_condition in group:
                 old_to_new[old_c] = new_c
+    # the indexes must be unique, so when grouping conditions we
+    # transform the indexes to ensure this
+    df[index_col] = 2*df[index_col].max()*df[condition_col].values + df[index_col]            
     condition_series = condition_series.map(old_to_new)
     df[condition_col] = condition_series
     config['LOAD']['label_groups'] = condition_groups
@@ -397,7 +407,7 @@ def prepare_feature_data(
         subdir, windowed_fname='windowed.csv', featured_fname='featured.csv',
         feature_set=None, feature_group=None,
         bits_per=1, lzc_type=None, lzc_imp=None, lze_imp=None,
-        entropy_tols=None, hurst_kind='random_walk',
+        entropy_tols=None, hurst_kind='random_walk', ideal_features_only=True,
         normed_rmssd=True, **kwargs):
     if feature_set is None:
         if feature_group == 'stats':
@@ -406,12 +416,16 @@ def prepare_feature_data(
             feature_set = INFO_FEATURE_GROUP
         elif feature_group == 'freq':
             feature_set = FREQ_FEATURE_GROUP
+        elif feature_group == 'ideal':
+            feature_set = IDEAL_FEATURE_GROUP
         elif feature_group == 'supported':
             feature_set = SUPPORTED_FEATURE_GROUP
         else:
             raise ValueError(f'Unrecognised feature group {feature_group}')
+        if ideal_features_only:
+            feature_set &= IDEAL_FEATURE_GROUP
     else:
-        feature_set = get_list_from_string(feature_set)
+        feature_set = set(get_list_from_string(feature_set))
         if len(feature_set) == 0:
             raise ValueError('')
     if 'HRVRMSSD' in feature_set:
@@ -421,9 +435,11 @@ def prepare_feature_data(
         add_hrv_rmssd = False
     # load windowed data and get the relevant configuration
     windowed_parent_path = get_parent_path('windowed', subdir)
+    logger.info(f"Preparing featured data for data in {windowed_parent_path}")
+    logger.info(f"Calculating features: {feature_set}")
     logger.info("Loading windowed data")
-    windowed_df, windowed_config = load_dataframe_and_config(
-        windowed_parent_path, windowed_fname, drop_inf=False)
+    windowed_df, windowed_config = load_windowed_dataframe_and_config(
+        subdir, windowed_fname)
     n_channels = int(windowed_config['LOAD']['n_channels'])
     label_mapping = windowed_config['LOAD']['label_mapping']
     channels = windowed_config['LOAD']['channels']
@@ -477,8 +493,8 @@ def prepare_feature_data(
     featured_parent_path = get_parent_path('featured', subdir)
     logger.info("Loading pre-existing featured data if it exists")
     try:
-        featured_df, featured_config = load_dataframe_and_config(
-            featured_parent_path, featured_fname)
+        featured_df, featured_config = load_featured_dataframe_and_config(
+            subdir, featured_fname)
     except FileNotFoundError:
         featured_df = None
         featured_config = windowed_config
@@ -502,6 +518,14 @@ def prepare_feature_data(
         feature_names = set(old_feature_names) | set(feature_names)
     # only now add hrv_rmssd if requested
     if add_hrv_rmssd:
+        if 'label_groups' in windowed_config['LOAD']:
+            # to do this we would need to recover the original
+            # condition names and the original window indexes
+            # it may be better to only convert to label groups after
+            # featurisation
+            raise NotImplementedError(
+                "Cannot calculate HRVRMSSD for label groups")
+        
         all_participants_events = load_event_info_from_csv(
             participant_list)
         insert_window_start_and_end_times(
@@ -520,8 +544,8 @@ def prepare_feature_data(
     featured_config['FEATURED']['feature_names'] = list(feature_names)
     # update featured_config with correct details
     # save down to file.
-    write_dataframe_and_config(
-        featured_parent_path, featured_df, featured_config, 'featured.csv')
+    write_featured_dataframe_and_config(
+        subdir, featured_df, featured_config, 'featured.csv')
 
 
 

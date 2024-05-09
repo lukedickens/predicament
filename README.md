@@ -89,7 +89,7 @@ inactive:baseline,break;active:exper_video,wildlife_video,familiar_music,tchaiko
 Our choice of condition grouping corresponds to the following example calls
 *  for dreem data 4 seconds:
 ```
-python3 prepare_evaluation_data.py --mode windowed --subdir binary_dreem_10secs --window-size 2560 -f dreem --conditions baseline,break,exper_video,wildlife_video,familiar_music,tchaikovsky,family_inter --condition-groups "inactive:baseline,break;active:exper_video,wildlife_video,familiar_music,tchaikovsky,family_inter" 
+python3 prepare_evaluation_data.py --mode windowed --subdir binary_dreem_4secs --window-size 1024 -f dreem --conditions baseline,break,exper_video,wildlife_video,familiar_music,tchaikovsky,family_inter --condition-groups "inactive:baseline,break;active:exper_video,wildlife_video,familiar_music,tchaikovsky,family_inter" 
 ```
 *  for dreem data 10 second windows:
 ```
@@ -113,14 +113,16 @@ For featured experiments we have to convert time-series windows into feature vec
 
 The subdirectory name is then used as a key for the subsequent experiments, and a matching subfolder will be created in the `data/featured` directory (and other directories), so do not change the windowed subdirectory name after featuring the data. For instance, on 6th Dec 2023 at 19:35, I created folder relative to the pwd of `data/featured/20231206193533`. This corresponds to subdir of `20231206193533`. We can then create features from this, by using `--subdir 20231206193533`. This results in folder `data/featured/20231206193533` with a data file and a config file. The recommended approach is to generate all supported features in one go with the following command:
 
-```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533
+```
+python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533
 ```
 
 ### Featuring data incrementally
 
 If you want to construct your features in a series of calls, e.g. to break up the computation time, or to debug issues, then you can do so by simply running the featuring call multiple times, each time using a different `--feature-group` flag (for predefined sets of features) or `--feature-set` flag (to specify specific feature types). If a featured dataset has been previously been created for this subdirectory, then this will update the dataset with the new features. For instance, you could start with the call:
 
-```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-group stats
+```
+python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-group stats
 ```
 
 This only produces a subset of the features, referred to as feature-group `stats`. 
@@ -140,7 +142,7 @@ This extends the pre-existing featured data to include channel-wise features for
 ```python3 prepare_evaluation_data.py --mode featured --subdir 20231206193533 --feature-group freq
 ```
 
-Some features, e.g.  `SampleEntropy`, can take extreme times to compute and has been omitted until a more efficient approach can be found and the value of the feature determined.
+Some features, e.g.  `SampleEntropy`, can take a long time to compute.
 
 
 # Older or unchecked material

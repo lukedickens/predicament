@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 import scipy.stats
+import copy
 from strenum import StrEnum
 from itertools import combinations
 import math
@@ -10,16 +11,21 @@ import scipy.signal # using butter, lfilter
 from scipy.fft import fft, ifft
 # see https://github.com/Mottl/hurst
 from hurst import compute_Hc
+import logging
+logger = logging.getLogger(__name__)
 import re
 re_nonalpha = re.compile('[^a-zA-Z]')
 
+
+from predicament.utils.dataframe_utils import drop_nan_cols
+from predicament.utils.dataframe_utils import drop_inf_cols
+
 from predicament.measures.lempel_ziv import lempel_ziv_entropy
-from predicament.measures.lempel_ziv import lempel_ziv_entropy_numpy
 from predicament.measures.lempel_ziv import lempel_ziv_casali_flow
 from predicament.measures.lempel_ziv import lempel_ziv_casali_loop
 
-
-from statsmodels.tsa.ar_model import AutoReg # for Auto Regression (arCoeff) features
+# for Auto Regression (arCoeff) features
+from statsmodels.tsa.ar_model import AutoReg 
 
 Feature = StrEnum(
     'Feature',
@@ -51,12 +57,205 @@ SUPPORTED_FEATURE_GROUP = set(
     + ['HRVRMSSD'])
 PROBLEMATIC_FEATURE_GROUP = set([
 #    'SampleEntropy',
-    'LempelZivEntropy', # LempelZivEntropy expensive and may not add much
+    'LempelZivEntropy', # LempelZivEntropy expensive and may be imperfectly implemented
     'Energy', # Energy highly correlated with SD 
     'FreqSkewness']) # FreqSkewness highly correlated with MeanFreq
 IDEAL_FEATURE_GROUP = SUPPORTED_FEATURE_GROUP - PROBLEMATIC_FEATURE_GROUP
 
 
+def get_feature_group(group_name, data_format, allow_unsafe_features=False):
+    if group_name  == 'stats':
+        feature_group = STATS_FEATURE_GROUP
+    elif group_name  == 'info':
+        feature_group = INFO_FEATURE_GROUP
+    elif group_name  == 'freq':
+        feature_group = FREQ_FEATURE_GROUP
+    else:
+        raise ValueError(f"Unrecognised group name {group_name}")
+    if not allow_unsafe_features:
+        feature_group = IDEAL_FEATURE_GROUP.intersection(feature_group)
+    return feature_group
+
+def filter_and_group_feature_names(
+        group_names, feature_names, data_format,
+        allow_unsafe_features=False):
+    """
+    
+    """
+    group_type_mapping = {}
+    group_feature_mapping = {}
+    for group_name in group_names:
+        group_types = get_feature_group(
+            group_name, data_format, allow_unsafe_features)
+        group_type_mapping[group_name] = group_types
+        group_features = filter_features(
+            feature_names, group_types)
+        group_feature_mapping[group_name] = group_features
+#        print(f"{group_name}_features:\n\t{group_features}")
+    return group_type_mapping, group_feature_mapping
+
+def remove_features_with_inf_values(featured_df, config):
+    """
+    """
+    config = copy.deepcopy(config)
+    feature_names = config['FEATURED']['feature_names']
+    feature_names.sort()
+
+    # Filter columns with infinite values and record removed columns
+    # makes strong assumption that only feature columns are infinite
+    featured_df, removed_columns = drop_inf_cols(featured_df)
+    if not np.all([rem in feature_names for rem in removed_columns]):
+        raise ValueError(
+            "Trying to remove infinite features but non-features removed")
+    #    
+    # outputting for debug
+    logger.debug("Before removal")
+    logger.debug(
+        f"feature_names= {feature_names} (len = {len(feature_names)})")
+    feature_names = [ f for f in feature_names if not f in removed_columns]
+    feature_names.sort()
+    config['FEATURED']['feature_names'] = feature_names
+    #    
+    # outputting for debug
+    logger.debug("After removal")
+    logger.debug(
+        f"feature_names= {feature_names} (len = {len(feature_names)})")
+    #
+    return featured_df, config
+
+
+def robustify_feature_name(feature_name):
+    # Using regular expression to find digits at the end of the feature_name
+    match = re.search(r'(\d+)$', feature_name)
+    if match:
+        # If digits found, replace them with digits inside square brackets
+        transformed_feature_name = re.sub(r'(\d+)$', r'[\1]', feature_name)
+        return transformed_feature_name
+    else:
+        # If no digits found, just append the original feature_name
+        return feature_name
+
+def replace_channel_id_with_channel_name(feature_name, id_to_name_mapping):
+    feature_name = robustify_feature_name(feature_name)
+    # Using regular expression to find digits inside square brackets
+    # at the end of the feature_name
+    match = re.search(r'(\[\d+\])$', feature_name)
+    if match:
+        # Extract the digits found inside square brackets
+        digits_in_brackets = match.group(1)
+        # Extract digits from inside the brackets
+        digits = re.search(r'(\d+)', digits_in_brackets).group(1)
+        # Check if the digits exist in the id_to_name_mapping
+        if digits in id_to_name_mapping:
+            # Replace the digits inside square brackets with the corresponding feature_name from the id_to_name_mapping
+            replaced_feature_name = re.sub(r'\[\d+\]$', f'[{id_to_name_mapping[digits]}]', feature_name)
+            return replaced_feature_name
+        else:
+            # If digits not found in id_to_name_mapping, return the original feature_name
+            return feature_name
+    else:
+        # If no digits inside square brackets found, return the original feature_name
+        return feature_name
+        
+def robustify_feature_names(feature_names):
+    transformed_feature_names = []
+    for feature_name in feature_names:
+        transformed_feature_names.append(robustify_feature_name(feature_name))
+    return transformed_feature_names
+    
+def replace_channel_ids_with_channel_names(
+        feature_names, id_to_name_mapping):
+    transformed_feature_names = []
+    for feature_name in feature_names:
+        transformed_feature_names.append(
+            replace_channel_id_with_channel_name(
+                feature_name, id_to_name_mapping))
+    return transformed_feature_names
+
+def construct_feature_groups(config, group_by):
+    feature_names = config['FEATURED']['feature_names']
+    if group_by == 'type':
+        # feature_cond_corr_df.index
+        base_feature_types = config['FEATURED']['feature_set']
+        base_feature_types.sort()
+        feature_groups = {
+            t:[f  for f in feature_names if f.startswith(t) ] for t in base_feature_types}
+    if group_by == 'channel':
+        channels = config['LOAD']['channels']
+        id_to_name_mapping = {
+            str(ch): channel for ch, channel in enumerate(channels)}
+        feature_names = config['FEATURED']['feature_names']
+        excludes = ['Correlation', 'arCoeff']
+        for exclude in excludes:
+            feature_names = [
+                f for f in feature_names if not f.startswith(exclude) ]
+        clean_feature_names = replace_channel_ids_with_channel_names(
+            feature_names, id_to_name_mapping)
+#        print(f"feature_names = {feature_names}") 
+#        print(f"clean_feature_names = {clean_feature_names}") 
+        feature_groups = {}
+        for channel in channels:
+            channel_features = []
+            for f, clean in zip(feature_names, clean_feature_names):
+                if clean.endswith(f'[{channel}]'):
+                    channel_features.append(f)
+            if len(channel_features) > 0:
+                feature_groups[channel] = channel_features
+    # clean up empty groups
+    keys = list(feature_groups.keys())
+    for key in keys:
+        if len(feature_groups[key]) == 0:
+            feature_groups.pop(key)
+    return feature_groups
+    
+def filter_and_group_featured_df(
+        featured_df, config, group_names,
+        allow_unsafe_features=False, remove_overlapping_windows=False):
+    """
+    filters out undesired names and groups these for easier analysis.
+    also removes any features with infinite values
+    """
+    config = copy.deepcopy(config)
+    data_format = config['LOAD']['data_format']
+    #
+    featured_df, config = remove_features_with_inf_values(
+        featured_df, config)
+    #
+    feature_names = config['FEATURED']['feature_names']
+    tuple_ = filter_and_group_feature_names(
+            group_names, feature_names, data_format,
+            allow_unsafe_features)
+    group_type_mapping, group_feature_mapping = tuple_
+    # extract feature names
+    feature_names= [
+        f for group_name in group_names \
+            for f in group_feature_mapping[group_name]  ]
+    # extract all feature types
+    feature_types= [
+        t for group_name in group_names \
+            for t in group_type_mapping[group_name]  ]
+    
+    config['FEATURED']['feature_names'] = feature_names
+    config['FEATURED']['feature_set'] = feature_types
+    # now filter dataframe again to exclude non-grouped features
+    label_cols = config['WINDOWED']['label_cols']
+    all_cols = list(label_cols) + feature_names
+    featured_df = featured_df.loc[:,all_cols]
+    # remove dataframe rows to ensure non-overlapping windows?
+    if remove_overlapping_windows:
+        window_size = config['LOAD']['window_size']
+        window_step = config['LOAD']['window_step']
+        logger.debug(
+            f"Initially there are {len(featured_df.index)} windows")
+        logger.info("Removing overlapping windows")
+        overlap_factor = window_size // window_step
+        row_filter = (featured_df['window index'].values % overlap_factor) == 0
+        featured_df = featured_df.loc[row_filter,:]
+        logger.debug(
+            f"Subsequently we have {len(featured_df.index)} windows")
+    return featured_df, config, group_feature_mapping
+    
+#TODO better in a timeseries module?
 def quantize_timeseries(seq, amp_min, amp_max, bits_per=8, binarize=True):
     bins = np.linspace(amp_min, amp_max, 2**bits_per+1)
     if bits_per <= 8:
@@ -198,6 +397,8 @@ def convert_timeseries_to_features(
     lzc_imp - which implementation of LempelZivComplexity to use
     sament_imp - which implementation of SampleEntroy to use
     """
+#    print(f"feature_set = {feature_set}")
+#    print(f"type(feature_set) = {type(feature_set)}")
     for f in feature_set:
         if f not in Features:
             raise ValueError(f"Unrecognised feature {f}")
@@ -299,7 +500,7 @@ def convert_timeseries_to_features(
         lyapunovs = np.empty(C)
         for c, xchan in enumerate(X):
             # remove duplicates
-            xchan = xchan[np.insert(np.diff(xchan).astype(np.bool), 0, True)]
+            xchan = xchan[np.insert(np.diff(xchan).astype(bool), 0, True)]
             # calculate exponent
             lyapunovs[c] = np.mean(np.log(np.abs(np.diff(xchan))))
         features = np.concatenate([features, lyapunovs])
@@ -313,9 +514,8 @@ def convert_timeseries_to_features(
         if (lze_imp is None) or (lze_imp == 'seq'):
             for c, ts in enumerate(Q):
                 lempel_ziv_entropies[c] = lempel_ziv_entropy(ts)
-        elif (lze_imp == 'numpy'):
-            for c, ts in enumerate(Q):
-                lempel_ziv_entropies[c] = lempel_ziv_entropy_numpy(ts)
+        else:
+            raise ValueError(f"Unrecognised LempelZivEntropy implementation {lze_imp}")
         features = np.concatenate([features, lempel_ziv_entropies])
         feature_names += [f'LempelZivEntropy[b={bits_per}][{d}]' for d in range(lempel_ziv_entropies.size)]
     if Feature.LempelZivComplexity in feature_set: 
@@ -352,6 +552,7 @@ def convert_timeseries_to_features(
         freqBands = np.arange(Xfreq.shape[1]).reshape((1,-1))
         XFreqMeans = np.sum(freqBands*intensities,axis=1)/np.sum(intensities, axis=1)
         XFreqMeans = XFreqMeans.reshape((-1,1))
+        XFreqM2 = np.sum(intensities*(freqBands - XFreqMeans)**2,axis=1)/np.sum(intensities, axis=1)
         #print(f"freqBands = {freqBands}")
         # | maxFreqInd	|	Largest frequency component |
         if Feature.MaxFreqInd in feature_set:
@@ -385,7 +586,6 @@ def convert_timeseries_to_features(
             # y[k] is the intensity at that band.
 #            XmeanFreq = np.sum(freqBands*intensities,axis=1)/np.sum(intensities, axis=1)
 #            XFreqSkews =  np.concatenate((features,  scipy.stats.skew(XFreq, axis=1,))
-            XFreqM2 = np.sum(intensities*(freqBands - XFreqMeans)**2,axis=1)/np.sum(intensities, axis=1)
             XFreqM3 = np.sum(intensities*(freqBands - XFreqMeans)**3,axis=1)/np.sum(intensities, axis=1)
             XFreqSkews = XFreqM3/XFreqM2**(3/2)
             features = np.concatenate((features, XFreqSkews))
@@ -421,9 +621,20 @@ def add_features_to_dataframe(
         c for c in left_cols if (c in merge_on) or (not c in right_cols) ]
     # hide the columns that will be overridden
     existing_df = existing_df.loc[:,preserved_left_cols]
+#    print(f"len(existing_df.index) = {len(existing_df.index)}")
+#    print(f"len(new_df.index) = {len(new_df.index)}")
+#    print(f"merge_on = {merge_on}")
+#    for col in merge_on:
+#        print(f"existing_df[col].dtype = {existing_df[col].dtype}")    
+#        print(f"new_df[col].dtype = {new_df[col].dtype}")    
+#        print(f"existing_df[col].unique() = {existing_df[col].unique()}")    
+#        print(f"new_df[col].unique() = {new_df[col].unique()}")    
     result_df = pd.merge(existing_df, new_df, how='inner', on=merge_on)
+#    print(f"len(result_df.index) = {len(result_df.index)}")
     if len(existing_df.index) != len(result_df.index):
-        raise ValueError('Cannot merge as rows do not coincide')
+        existing_df.to_csv('/tmp/existing_df.csv')
+        new_df.to_csv('/tmp/new_df.csv')
+        raise ValueError('Cannot merge as rows do not coincide, saving to /tmp')
     return result_df
 
 
@@ -442,7 +653,7 @@ def filter_features(feature_names, type_set):
 #    for name in feature_names:
 #        stem  name.split('[')[0].split('_')[0]
             
-def derive_feature_types(feature_names, feature_set, label_cols=None):
+def derive_feature_types(feature_names, base_feature_types, label_cols=None):
     if label_cols is None:
         label_cols  =  ["participant", "condition", "window index"]
     derived_feature_names = []
@@ -455,7 +666,7 @@ def derive_feature_types(feature_names, feature_set, label_cols=None):
                 f = f[:-1].rstrip('0123456789')[:-1]
         else:
             f = f.rstrip('0123456789')
-        for type_ in feature_set:
+        for type_ in base_feature_types:
             if f.startswith(type_):
                 derived_feature_types.add(f)
                 break

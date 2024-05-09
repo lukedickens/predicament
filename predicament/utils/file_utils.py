@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 29 18:51:32 2022
-
-@author: Zerui Mu
-
 Utility functions
 """
 
@@ -14,12 +10,18 @@ import pandas as pd
 import numpy as np
 import configparser
 
+import logging
+logger = logging.getLogger(__name__)
+
 from predicament.utils.config import WINDOWED_BASE_PATH
 from predicament.utils.config import FEATURED_BASE_PATH
 
 from predicament.utils.config import CROSS_VALIDATION_BASE_PATH
 from predicament.utils.config_parser import config_to_dict
 from predicament.utils.config_parser import dict_to_config
+
+from predicament.utils.dataframe_utils import drop_inf_cols
+from predicament.utils.dataframe_utils import drop_nan_cols
 
 def local2unix(datetime):
     """
@@ -74,81 +76,82 @@ def _test_unix2local():
 def get_evaluation_datadir(n_classes, func):
     data_folder = os.path.join(MOTOR_MOVEMENT_DATA_FOLDER, './Ray/{}classes_{}/'.format(n_classes, func))
 
+def write_windowed_dataframe_and_config(subdir, df, config, data_fname='windowed.csv', **kwargs):
+    data_dir = os.path.join(WINDOWED_BASE_PATH,subdir)
+    write_dataframe_and_config(
+        data_dir, df, config, data_fname, **kwargs)
+
+def write_featured_dataframe_and_config(subdir, df, config, data_fname='featured.csv', **kwargs):
+    data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
+    write_dataframe_and_config(
+        data_dir, df, config, data_fname, **kwargs)
+
 def write_dataframe_and_config(
-        dir_path, data, config, data_fname, config_fname='details.cfg'):
+        dir_path, df, config, data_fname, config_fname='details.cfg'):
     if type(config) is dict:
         config = dict_to_config(config)
     data_path = os.path.join(dir_path, data_fname)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     print(f"writing data to {data_path}")
+    df.to_csv(data_path)
     # write with progress bar https://stackoverflow.com/questions/64695352/pandas-to-csv-progress-bar-with-tqdm 
-    data.to_csv(data_path)
-##    chunk_indices = np.linspace(0,len(data), 101)
+##    chunk_indices = np.linspace(0,len(df), 101)
 ##    chunk_slices = zip(chunk_indices[:-1], chunk_indices[1:])
 ##    for i, (start, end) in enumerate(tqdm(chunk_slices)):
 ##        if i == 0: # first row
-##            data.loc[start:end].to_csv(data_path, mode='w', index=True)
+##            df.loc[start:end].to_csv(data_path, mode='w', index=True)
 ##        else:
-##            data.loc[start:end].to_csv(data_path, header=None, mode='a', index=True)
-#    chunks = np.array_split(data.index, 100) # split into 100 chunks
+##            df.loc[start:end].to_csv(data_path, header=None, mode='a', index=True)
+#    chunks = np.array_split(df.index, 100) # split into 100 chunks
 #    for i, chunk in enumerate(tqdm(chunks)):
 #        if i == 0: # first row
-#            data.loc[chunk].to_csv(data_path, mode='w', index=True)
+#            df.loc[chunk].to_csv(data_path, mode='w', index=True)
 #        else:
-#            data.loc[chunk].to_csv(data_path, header=None, mode='a', index=True)
+#            df.loc[chunk].to_csv(data_path, header=None, mode='a', index=True)
 
     config_path = os.path.join(dir_path, config_fname)
     print(f"writing config to {config_path}")
     with open(config_path, 'w') as config_file:
         config.write(config_file)
 
-def load_windowed_data_and_config(subdir, drop_inf=None, **kwargs):
+def load_windowed_dataframe_and_config(subdir, data_fname='windowed.csv', **kwargs):
     data_dir = os.path.join(WINDOWED_BASE_PATH,subdir)
     df, config = load_dataframe_and_config(
-        data_dir, 'windowed.csv', drop_inf=drop_inf, **kwargs)
+        data_dir, data_fname, **kwargs)
     return df, config    
     
-def load_dataframe_and_config(
-        dir_path, data_fname, config_fname='details.cfg', 
-        drop_inf='cols', **readargs):
-    data_path = os.path.join(dir_path, data_fname)
-    print(f"Reading dataframe from {data_path}")
-    data = pd.read_csv(data_path, index_col=0,  **readargs)
-    config_path = os.path.join(dir_path, config_fname)
-    print(f"Reading config from {config_path}")
-    config = configparser.ConfigParser()
-    with open(config_path, 'r') as config_file:
-        config.read_file(config_file)
-    # convert config to dictionary
-    dict_config =  config_to_dict(config)
+def load_featured_dataframe_and_config(subdir, data_fname='featured.csv', drop_inf='cols', **kwargs):
+    data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
+    df, config = load_dataframe_and_config(
+        data_dir, data_fname, **kwargs)
     if drop_inf=='cols':
-        data, removed_columns = drop_inf_cols(data)
-        dict_config['FEATURED']['removed_features'] = removed_columns
-        feature_names = dict_config['FEATURED']['feature_names']
-        dict_config['FEATURED']['feature_names'] = [
+        df, removed_columns = drop_inf_cols(df)
+        config['FEATURED']['removed_features'] = removed_columns
+        feature_names = config['FEATURED']['feature_names']
+        config['FEATURED']['feature_names'] = [
             f for f in feature_names if not f in removed_columns]
     elif not drop_inf:
         pass
     else:
         raise ValueError(f"Unrecognised value for drop_inf of {drop_inf}")
-    return data, dict_config
+    return df, config    
+    
+def load_dataframe_and_config(
+        dir_path, data_fname, config_fname='details.cfg', 
+        **readargs):
+    data_path = os.path.join(dir_path, data_fname)
+    logger.info(f"Reading dataframe from {data_path}")
+    df = pd.read_csv(data_path, index_col=0,  **readargs)
+    config_path = os.path.join(dir_path, config_fname)
+    logger.info(f"Reading config from {config_path}")
+    raw_config = configparser.ConfigParser()
+    with open(config_path, 'r') as config_file:
+        raw_config.read_file(config_file)
+    # convert config to dictionary
+    dict_config =  config_to_dict(raw_config)
+    return df, dict_config
 
-def drop_inf_cols(df):
-    removed_columns = []
-    for col in df.select_dtypes(include=[np.number]).columns:
-        if np.any(np.isinf(df[col])):
-            removed_columns.append(col)
-            del df[col]
-    return df, removed_columns
-
-def drop_nan_cols(df):
-    removed_columns = []
-    for col in df.select_dtypes(include=[np.number]).columns:
-        if np.any(np.isnan(df[col])):
-            removed_columns.append(col)
-            del df[col]
-    return df, removed_columns
 
 # _test_local2unix()
 # _test_unix2local()
