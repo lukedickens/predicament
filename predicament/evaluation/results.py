@@ -14,6 +14,8 @@ def output_model_best_from_results(df):
         for k,v in d.items():
             model_best_params = v
             print(f"best params: {v}")
+            print(';'.join([k for k in model_best_params.keys()]))
+            print(';'.join([str(v) for v in model_best_params.values()]))
         print()
         
         

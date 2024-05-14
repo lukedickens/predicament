@@ -99,7 +99,9 @@ def main(
         hyperparameter_overrides=None,
         hyperparameter_excludes=None,
         search_type=None):
-        
+
+    logger.info('Running featured prediction hyperparamter search on:')        
+    logger.info(f'\tsubdir: {subdir}')        
     featured_data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
     featured_df, featured_config = load_dataframe_and_config(
         featured_data_dir, 'featured.csv')
@@ -208,7 +210,7 @@ def main(
     # n_splits is determined by the data for hold out one group cross validation
     n_splits = param_search.get_params()['cv'].get_n_splits()
     results_df = compute_analyse_and_store_results(
-        param_search, estimator, data_format, held_out, is_balanced, n_splits,
+        param_search, estimator_name, data_format, held_out, is_balanced, n_splits,
         feature_types, window_size, search_type)
 
     #
@@ -237,11 +239,11 @@ def main(
     
 
 def compute_analyse_and_store_results(param_search,
-        estimator, data_format, held_out, is_balanced, n_splits, feature_types,
+        estimator_name, data_format, held_out, is_balanced, n_splits, feature_types,
         window_size, search_type):
     results_df = pd.DataFrame(param_search.cv_results_)
     i = 0
-    results_df.insert(i, 'model', str(estimator))
+    results_df.insert(i, 'model', str(estimator_name))
     i +=1
     results_df.insert(i, 'data format', data_format)
     i +=1
@@ -254,7 +256,7 @@ def compute_analyse_and_store_results(param_search,
     results_df.insert(i, 'feature set', str(feature_types))
     i +=1
     results_df.insert(i, 'window size', window_size)
-    results_fname = f'{search_type}_{str(estimator)}'
+    results_fname = f'{search_type}_{estimator_name}'
     logger.info(f"Saving to {results_fname}")
     save_results_df_to_file(results_df, results_fname)
     output_model_best_from_results(results_df)
@@ -270,7 +272,7 @@ def compute_analyse_and_store_results(param_search,
     plt.plot(thresholds, props)
     plt.xlabel("mean test score")
     plt.ylabel("proportion greater than")
-    thresholds_fname = f'{search_type}_{str(estimator)}_thresholds.csv'
+    thresholds_fname = f'{search_type}_{estimator_name}_thresholds.png'
     logger.info(f"Saving thresholds plot to {thresholds_fname}")
     plt.savefig(thresholds_fname)
     return results_df

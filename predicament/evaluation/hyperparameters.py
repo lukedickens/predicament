@@ -91,7 +91,8 @@ BAYESOPT_SEARCH_SPACES[type(RandomForestClassifier())] = dict(
         # Number of trees in random forest
         n_estimators = Integer(10,1000, prior='log-uniform'),
         # Number of features to consider at every split
-        max_features = Categorical(['log2', 'sqrt']),
+#        max_features = Categorical(['log2', 'sqrt']),
+        max_features = Real(1e-2, 1.0,  prior='log-uniform'),
         # function to measure the quality of a split
         criterion = Categorical(['gini', 'entropy', 'log_loss']),
         # Maximum number of levels in tree
@@ -113,14 +114,14 @@ BAYESOPT_SEARCH_SPACES[type(MLPClassifier())] =  {
 
 # up-to three layer MLP
 BAYESOPT_SEARCH_SPACES[type(ThreeHiddenLayerClassifier())] =  {
-        'layer1': Integer(10, 100),
-        'layer2': Integer(10, 100),
+        'layer1': Integer(10, 400),
+        'layer2': Integer(10, 200),
         'layer3': Integer(10, 100),
         'activation': Categorical(['tanh', 'relu']),
         'solver': Categorical(['sgd', 'adam']),
         'alpha': Real(1e-6, 1e-2, prior='log-uniform'),
         'learning_rate': Categorical(['constant','adaptive']), # ,'invscaling'
-        'learning_rate_init': Real(1e-6, 1e+1, prior='log-uniform'),
+        'learning_rate_init': Real(1e-6, 1.0, prior='log-uniform'),
      }
 
 
