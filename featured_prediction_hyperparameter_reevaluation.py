@@ -62,6 +62,10 @@ from predicament.evaluation.hyperparameters import get_estimator
 from predicament.evaluation.hyperparameters import get_param_scopes
 #from predicament.evaluation.hyperparameters import get_param_search_object
 
+from predicament.evaluation.monte_carlo_test import monte_carlo_test_confusion_matrix
+#from predicament.evaluation.monte_carlo_test import sample_cm
+#from predicament.evaluation.monte_carlo_test import score_from_cm
+
 from predicament.models.mlp_wrappers import ThreeHiddenLayerClassifier
     
 def main(
@@ -240,7 +244,7 @@ def main(
         macro_f1_score = macro_f1_scores[fold]
         micro_f1_score = micro_f1_scores[fold]
         cm = confusion_matrices[fold]
-        perm_p = permutation_test_confusion_matrix(
+        perm_p = monte_carlo_test_confusion_matrix(
             cm, scoring=perm_scoring, trials=perm_trials)
         cmrow = [ cm[i,j] \
             for i in range(cm.shape[0]) \
@@ -271,27 +275,6 @@ def main(
     reeval_df.to_csv(reeval_path)
 
 
-def permutation_test_confusion_matrix(cm, scoring='accuracy', trials=10000):
-    score = score_from_cm(cm, scoring)
-    beat_count = 0
-    for i in range(trials):
-        permutation = permute_cm(cm)
-        sample_score = score_from_cm(permutation, scoring)
-        if sample_score > score:
-            beat_count += 1
-    return beat_count/trials
-
-def permute_cm(cm):
-    pvals = cm.sum(axis=0)/cm.sum()
-    sample = np.array(
-        [ np.random.multinomial(n,pvals) for n in cm.sum(axis=1) ])
-    return sample
-
-def score_from_cm(cm, scoring):
-    if scoring == 'accuracy':
-        return np.sum(cm.diagonal())/cm.sum()
-    else:
-        raise ValueError(f"Unrecognised scoring {scoring}")
 
 def create_parser():
     import argparse
