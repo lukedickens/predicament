@@ -3,6 +3,11 @@ data
 *pyc
 logs
 
+# no images or data by default
+*png
+*csv
+*zip
+
 # self-input files
 data_setup.py
 test.ipynb

@@ -67,6 +67,7 @@ class ThreeHiddenLayerClassifier(BaseEstimator, ClassifierMixin):
                                    learning_rate_init=self.learning_rate_init,
                                    max_iter=self.max_iter)
         self.model.fit(X, y)
+        self._classes = self.model._classes 
         return self
 
     def predict(self, X):

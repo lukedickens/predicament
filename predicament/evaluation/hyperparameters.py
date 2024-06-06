@@ -15,6 +15,55 @@ from skopt import BayesSearchCV
 from skopt.space import Real, Categorical, Integer
 
 
+ESTIMATORS = {
+    "SVC": SVC,
+    "GradientBoostingClassifier": GradientBoostingClassifier,
+    "RandomForestClassifier": RandomForestClassifier,
+    "MLPClassifier": MLPClassifier,
+    "ThreeHiddenLayerClassifier": ThreeHiddenLayerClassifier,
+    "TwoHiddenLayerClassifier": ThreeHiddenLayerClassifier,
+    "OneHiddenLayerClassifier": ThreeHiddenLayerClassifier
+}
+
+def get_estimator(estimator_name):
+    if estimator_name in list(ESTIMATORS.keys()):
+        return ESTIMATORS[estimator_name]()
+    else:
+        raise ValueError(f"Unrecognised estimatro name {estimator_name}")
+
+
+def get_estimator_and_hyperparamter_excludes(
+        estimator_name, hyperparameter_excludes, max_iter_opt=None):
+    estimator = get_estimator(estimator_name)        
+    if estimator_name == "TwoHiddenLayerClassifier":
+        # for 2 (hidden) layer MLP exclude hyperparameter layer3
+        hyperparameter_excludes.append('layer3') 
+    elif estimator_name == "OneHiddenLayerClassifier":
+        # for 2 (hidden) layer MLP exclude hyperparameters layer2 and layer3
+        hyperparameter_excludes.extend(['layer2', 'layer3']) 
+    
+#    if estimator_name == "SVC":
+#        estimator = SVC()
+#    elif estimator_name == "GradientBoostingClassifier":
+#        estimator = GradientBoostingClassifier()
+#    elif estimator_name == "RandomForestClassifier":
+#        estimator = RandomForestClassifier()
+#    elif estimator_name == "MLPClassifier":
+#        estimator = MLPClassifier(max_iter=max_iter_opt)
+#    elif estimator_name == "ThreeHiddenLayerClassifier":
+#        # hyperparameter_excludes = ['layer3'] # for 2 (hidden) layer MLP (leave empty for 3 layer MLP)
+#        #hyperparameter_excludes = ['layer2', 'layer3'] # for 1 (hidden) layer MLP
+#        estimator = ThreeHiddenLayerClassifier()
+#    elif estimator_name == "TwoHiddenLayerClassifier":
+#        # for 2 (hidden) layer MLP exclude hyperparameter layer3
+#        hyperparameter_excludes.append('layer3') 
+#        estimator = ThreeHiddenLayerClassifier()
+#    elif estimator_name == "OneHiddenLayerClassifier":
+#        # for 2 (hidden) layer MLP exclude hyperparameters layer2 and layer3
+#        hyperparameter_excludes.extend(['layer2', 'layer3']) 
+#        estimator = ThreeHiddenLayerClassifier()
+    return estimator, hyperparameter_excludes
+
 def get_bayesopt_search_spaces(estimator):
     search_spaces = BAYESOPT_SEARCH_SPACES[type(estimator)]
     return search_spaces
