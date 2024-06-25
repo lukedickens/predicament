@@ -206,12 +206,14 @@ def load_and_window_participant_data(
         participant_list=participant_list,
         conditions=conditions, channels=channels,
         n_channels=len(channels), sample_rate=sample_rate,
-        window_size=window_size, window_step=window_step,
         label_mapping=label_mapping, 
         data_format=data_format)
     loadargs = { k:str(v) for k, v in loadargs.items()}
     logger.debug(f"loadargs = {loadargs}")
     config['LOAD'] = loadargs        
+    windowedargs = dict(
+        window_size=window_size, window_step=window_step)
+    config['WINDOWED'] = windowedargs
     return data_by_participant, config_to_dict(config)
     
     
@@ -357,7 +359,7 @@ def consolidate_windowed_data(
     channels = config['LOAD']['channels']
     participant_list = config['LOAD']['participant_list']
     sample_rate = config['LOAD']['sample_rate']
-    window_size = config['LOAD']['window_size']
+    window_size = config['WINDOWED']['window_size']
     time = window_size/sample_rate
     logger.info(f"Loaded participant-wise data")
     logger.info(f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
@@ -366,7 +368,7 @@ def consolidate_windowed_data(
         data_by_participant, channels, window_size)
     # save down to file.
     windowed_dir_path = os.path.join(parent_path, subdir)
-    config['WINDOWED'] = {}
+#    config['WINDOWED'] = {}
     config['WINDOWED']['group_col'] = 'participant'
     config['WINDOWED']['target_col'] = 'condition'
     config['WINDOWED']['label_cols'] = str(label_cols).replace("'",'"')
@@ -445,8 +447,8 @@ def prepare_feature_data(
     channels = windowed_config['LOAD']['channels']
     participant_list = windowed_config['LOAD']['participant_list']
     sample_rate = windowed_config['LOAD']['sample_rate']
-    window_size = windowed_config['LOAD']['window_size']
-    window_step = windowed_config['LOAD']['window_step']
+    window_size = windowed_config['WINDOWED']['window_size']
+    window_step = windowed_config['WINDOWED']['window_step']
     time = window_size/sample_rate
     logger.info(
         f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")

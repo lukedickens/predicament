@@ -2,7 +2,7 @@ from skopt.space import Integer
 from sklearn.neural_network import MLPRegressor, MLPClassifier
 from sklearn.base import BaseEstimator, ClassifierMixin
 import itertools
-
+import numpy as np
 
 #class ThreeHiddenLayerClassifier(BaseEstimator, ClassifierMixin):
 #    def __init__(self, layer1=10, layer2=10, layer3=10, **kwargs):
@@ -46,7 +46,14 @@ class ThreeHiddenLayerClassifier(BaseEstimator, ClassifierMixin):
         self.learning_rate = learning_rate
         self.learning_rate_init = learning_rate_init
         self.max_iter = max_iter
+        self.set_hidden_layer_sizes()
         self.model = None
+
+    def get_classes(self):
+        return self.model.classes_
+    def set_classes(self, classes):
+        self.model.classes_ = classes
+    classes_ = property(get_classes, set_classes)
 
     def set_hidden_layer_sizes(self):
         if self.layer2 is None:
@@ -67,7 +74,6 @@ class ThreeHiddenLayerClassifier(BaseEstimator, ClassifierMixin):
                                    learning_rate_init=self.learning_rate_init,
                                    max_iter=self.max_iter)
         self.model.fit(X, y)
-        self._classes = self.model._classes 
         return self
 
     def predict(self, X):

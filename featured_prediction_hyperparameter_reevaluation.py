@@ -42,7 +42,7 @@ from skopt import BayesSearchCV
 from skopt.space import Real, Categorical, Integer
 
 
-from predicament.utils.file_utils import load_dataframe_and_config
+#from predicament.utils.file_utils import load_dataframe_and_config
 from predicament.utils.file_utils import load_featured_dataframe_and_config
 from predicament.utils.config_parser import config_to_dict
 
@@ -79,7 +79,7 @@ def main(
 #        n_iter=50,
 #        random_state = None,
         perm_scoring='accuracy',
-        perm_trials=100000,
+        perm_trials=2000000,
         fragile=True):
 
     logger.info('Running featured prediction hyperparamter revaluation with:')        
@@ -97,8 +97,8 @@ def main(
     participant_list = featured_config['LOAD']['participant_list']
     sample_rate = featured_config['LOAD']['sample_rate']
     Fs = sample_rate
-    window_size = featured_config['LOAD']['window_size']
-    window_step = featured_config['LOAD']['window_step']
+    window_size = featured_config['WINDOWED']['window_size']
+    window_step = featured_config['WINDOWED']['window_step']
     time = window_size/sample_rate
     logger.info(f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     resfname = resfile.split(os.sep)[-1]
@@ -194,12 +194,13 @@ def main(
     # Collect metrics and confusion matrices for each fold
     n_trains = []
     n_vals = []
+    test_participants_by_fold = []
     accuracies = []
-    macro_f1_scores = []
-    micro_f1_scores = []
+    f1_macro_scores = []
+    f1_micro_scores = []
     confusion_matrices = []    #
     # Assuming X is your feature matrix and y is your target vector
-    for train_index, test_index in group_kfold.split(X, y, groups=group_assignments):
+    for i, (train_index, test_index) in enumerate(group_kfold.split(X, y, group_assignments)):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         
@@ -211,26 +212,31 @@ def main(
         
         # Compute metrics
         acc = accuracy_score(y_test, y_pred)
-        macro_f1 = f1_score(y_test, y_pred, average='macro')
-        micro_f1 = f1_score(y_test, y_pred, average='micro')
+        f1_macro = f1_score(y_test, y_pred, average='macro')
+        f1_micro = f1_score(y_test, y_pred, average='micro')
         cm = confusion_matrix(y_test, y_pred)        
 
         # Append metrics and confusion matrix to the lists
         n_trains.append(y_train.size)
         n_vals.append(y_test.size)
         accuracies.append(acc)
-        macro_f1_scores.append(macro_f1)
-        micro_f1_scores.append(micro_f1)
+        f1_macro_scores.append(f1_macro)
+        f1_micro_scores.append(f1_micro)
         confusion_matrices.append(cm)
+
+        # ids of participants in each fold    
+        fold_pids = np.unique(group_assignments[test_index])
+        fold_participants = [ participant_list[p] for p in fold_pids]
+        test_participants_by_fold.append(fold_participants)
 
     # construct reevaluation df and save to file    
     columns = [
         'estimator', 'held out', 'balanced', 'params', 'label mapping', 'fold',
-        'n_train', 'n_val', 'perm_p']
+        'n_train', 'n_val', 'test_participants', 'accuracy', 'f1_macro', 'f1_micro', 'perm_p']
     cm_cols = [ 
         'cm[%d,%d]' % (i,j) \
-            for i in range(cm.shape[0]) \
-                for j in range(cm.shape[1]) ]
+            for i in range(len(label_mapping)) \
+                for j in range(len(label_mapping)) ]
     columns.extend(cm_cols)
     print(f"columns for dataframe {columns}")    
     print(f"len(columns) {len(columns)}")
@@ -240,9 +246,10 @@ def main(
     for fold in range(len(accuracies)):
         n_train = n_trains[fold]
         n_val = n_vals[fold]
+        test_participants = test_participants_by_fold[fold]
         accuracy = accuracies[fold]
-        macro_f1_score = macro_f1_scores[fold]
-        micro_f1_score = micro_f1_scores[fold]
+        f1_macro_score = f1_macro_scores[fold]
+        f1_micro_score = f1_micro_scores[fold]
         cm = confusion_matrices[fold]
         perm_p = monte_carlo_test_confusion_matrix(
             cm, scoring=perm_scoring, trials=perm_trials)
@@ -252,24 +259,25 @@ def main(
         dfrow = [
             estimator_name,first_rank_1_row['held out'], is_balanced, 
             first_rank_1_row['params'], label_mapping,
-            fold, n_train, n_val, perm_p]
+            fold, n_train, n_val, test_participants,
+            accuracy, f1_macro_score, f1_micro_score, perm_p]
         dfrow.extend(cmrow)
         print(f"len(dfrow) {len(dfrow)}")
         print(f"len(cmrow) {len(cmrow)}")
         lol.append(dfrow)
         print(f"Fold {fold} Accuracy: {accuracy}")
-        print(f"Fold {fold} Macro F1-Score: {macro_f1_score}")
-        print(f"Fold {fold} Micro F1-Score: {micro_f1_score}")
+        print(f"Fold {fold} Macro F1-Score: {f1_macro_score}")
+        print(f"Fold {fold} Micro F1-Score: {f1_micro_score}")
         print(f"Fold {fold} Confusion Matrix:\n{cm}")
         print(f"perm_p = {perm_p}")
         print()
     # Calculate and print aggregate metrics
     mean_accuracy = np.mean(accuracies)
-    mean_macro_f1 = np.mean(macro_f1_scores)
-    mean_micro_f1 = np.mean(micro_f1_scores)
+    mean_f1_macro = np.mean(f1_macro_scores)
+    mean_f1_micro = np.mean(f1_micro_scores)
     print(f"Mean Accuracy: {mean_accuracy}")
-    print(f"Mean Macro F1-Score: {mean_macro_f1}")
-    print(f"Mean Micro F1-Score: {mean_micro_f1}")        
+    print(f"Mean Macro F1-Score: {mean_f1_macro}")
+    print(f"Mean Micro F1-Score: {mean_f1_micro}")        
     reeval_df = pd.DataFrame(lol, columns=columns)
     print(f"Saving reevaluation to file {reeval_path}")
     reeval_df.to_csv(reeval_path)

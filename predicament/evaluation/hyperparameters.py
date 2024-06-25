@@ -163,12 +163,13 @@ BAYESOPT_SEARCH_SPACES[type(MLPClassifier())] =  {
 
 # up-to three layer MLP
 BAYESOPT_SEARCH_SPACES[type(ThreeHiddenLayerClassifier())] =  {
-        'layer1': Integer(10, 400),
-        'layer2': Integer(10, 200),
-        'layer3': Integer(10, 100),
+        'layer1': Integer(10, 400, prior='log-uniform'),
+        'layer2': Integer(10, 200, prior='log-uniform'),
+        'layer3': Integer(10, 100, prior='log-uniform'),
         'activation': Categorical(['tanh', 'relu']),
         'solver': Categorical(['sgd', 'adam']),
-        'alpha': Real(1e-6, 1e-2, prior='log-uniform'),
+        'alpha': Real(1e-6, 1e2, prior='log-uniform'),
+#        'alpha': Real(1e-1, 1e3, prior='log-uniform'),
         'learning_rate': Categorical(['constant','adaptive']), # ,'invscaling'
         'learning_rate_init': Real(1e-6, 1.0, prior='log-uniform'),
      }

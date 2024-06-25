@@ -41,7 +41,8 @@ from skopt import BayesSearchCV
 from skopt.space import Real, Categorical, Integer
 
 
-from predicament.utils.file_utils import load_dataframe_and_config
+#from predicament.utils.file_utils import load_dataframe_and_config
+from predicament.utils.file_utils import load_featured_dataframe_and_config
 from predicament.utils.config_parser import config_to_dict
 
 from predicament.utils.config import FEATURED_BASE_PATH
@@ -82,9 +83,11 @@ def main(
 
     logger.info('Running featured prediction hyperparamter search on:')        
     logger.info(f'\tsubdir: {subdir}')        
-    featured_data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
-    featured_df, featured_config = load_dataframe_and_config(
-        featured_data_dir, 'featured.csv')
+    featured_df, featured_config = load_featured_dataframe_and_config(
+        subdir)
+#    featured_data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
+#    featured_df, featured_config = load_dataframe_and_config(
+#        featured_data_dir, 'featured.csv')
 
     if type(random_state) is str:
         random_state = int(random_state)
@@ -98,8 +101,8 @@ def main(
     participant_list = featured_config['LOAD']['participant_list']
     sample_rate = featured_config['LOAD']['sample_rate']
     Fs = sample_rate
-    window_size = featured_config['LOAD']['window_size']
-    window_step = featured_config['LOAD']['window_step']
+    window_size = featured_config['WINDOWED']['window_size']
+    window_step = featured_config['WINDOWED']['window_step']
     time = window_size/sample_rate
     logger.info(f"sample_rate: {sample_rate}, n_samples = {window_size}, time: {time}s, n_channels: {n_channels}")
     
@@ -133,7 +136,8 @@ def main(
     if hyperparameter_overrides is None:
         hyperparameter_overrides = dict()
     else:
-        raise NotImplementedError("Would need to implement method to set override search spaces from string")
+        raise NotImplementedError(
+            "Would need to implement method to set override search spaces from string")
     if hyperparameter_excludes is None:
         hyperparameter_excludes = list()
     else:
@@ -369,6 +373,9 @@ def create_parser():
     parser.add_argument(
         '--search-type', default='bayesian_optimization',
         help="""What hyperparameter search type to perform.""")
+    parser.add_argument(
+        '--scoring', default='f1_macro',
+        help="""What score to use when optimising hyperparameters.""")
             
     # general        
     parser.add_argument('-V', '--version', action="version", version="%(prog)s 0.1")

@@ -4,24 +4,23 @@ import configparser
 
 STRING_ELEMENTS = {}
 STRING_ELEMENTS['LOAD'] = [
-    'data_format'
-
-    ]
+    'data_format']
 STRING_ELEMENTS['WINDOWED'] = [
-    'group_col', 'target_col'
-    ]
+    'group_col', 'target_col']
 STRING_ELEMENTS['FEATURED'] = [
     ]
+STRING_ELEMENTS['STANDARDISED'] = [
+    'core_subdir', 'norm_subdir', 'std_group']
 INT_ELEMENTS = {}
 INT_ELEMENTS['LOAD'] = [
     "n_channels",
-    "sample_rate",
-    "window_size",
-    "window_step",
-    ]
+    "sample_rate"]
 INT_ELEMENTS['WINDOWED'] = [
-    ]
+    "window_size",
+    "window_step"]
 INT_ELEMENTS['FEATURED'] = [
+    ]
+INT_ELEMENTS['STANDARDISED'] = [
     ]
 
 COMPLEX_ELEMENTS = {}
@@ -34,7 +33,8 @@ COMPLEX_ELEMENTS['LOAD'] = [
 COMPLEX_ELEMENTS['WINDOWED'] = [
     'label_cols']
 COMPLEX_ELEMENTS['FEATURED'] = [
-    'feature_set', 'feature_names'
+    'feature_set', 'feature_names', 'removed_features']
+COMPLEX_ELEMENTS['STANDARDISED'] = [
     ]
 
 def config_to_dict(config):

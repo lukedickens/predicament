@@ -120,16 +120,41 @@ def analyse_feature_vs_comparator(
     if add_agg_column:
         correlation_mtx = compute_and_add_aggregating_column(
             correlation_mtx)
+    labels = None
     if aggregate_rows:
-        feature_groups = construct_feature_groups(
-            config, group_by)
-        correlation_mtx = aggregate_rows_by_grouped_index(
-            correlation_mtx, feature_groups,
-            agg_element=row_agg_element,
-            agg_mode=row_agg_mode )
-        fstem = f"feature_vs_{comparator}_{group_by}_correlations"
+        if group_by == 'both':
+            feature_groups1 = construct_feature_groups(
+                config, 'channel')
+            correlation_mtx1 = aggregate_rows_by_grouped_index(
+                correlation_mtx, feature_groups1,
+                agg_element=row_agg_element,
+                agg_mode=row_agg_mode )
+            feature_groups2 = construct_feature_groups(
+                config, 'type')
+            correlation_mtx2 = aggregate_rows_by_grouped_index(
+                correlation_mtx, feature_groups2,
+                agg_element=row_agg_element,
+                agg_mode=row_agg_mode )
+            gap_row = pd.DataFrame(
+                [[np.nan] * correlation_mtx2.shape[1]],
+                columns=correlation_mtx2.columns, index=[""])
+            correlation_mtx =  pd.concat(
+                [correlation_mtx1, gap_row, correlation_mtx2])
+#            labels = correlation_mtx1.tolist() + [""] + correlation_mtx2.tolist()
+            fstem = f"feature_vs_{comparator}_both_correlations"
+        else:
+            feature_groups = construct_feature_groups(
+                config, group_by)
+            correlation_mtx = aggregate_rows_by_grouped_index(
+                correlation_mtx, feature_groups,
+                agg_element=row_agg_element,
+                agg_mode=row_agg_mode )
+            fstem = f"feature_vs_{comparator}_{group_by}_correlations"
     else:
         fstem = f"feature_vs_{comparator}_correlations"
+#    if labels is None:
+#        labels = correlation_mtx.tolist()
+
 
     csvfname = f"{fstem}.csv"
     pngfname = f"{fstem}.png"
@@ -140,14 +165,21 @@ def analyse_feature_vs_comparator(
     ## find bounds for colorbar
     ## get a good set of limits for the colorbar
     max_abs_val = np.nanmax(np.abs(correlation_mtx))
+    print(f"Maximum absolute value in array is {max_abs_val}")
     max_abs_val = math.ceil(max_abs_val*granularity)/40
     # plotting heatmap
     fig_height = row_height*len(correlation_mtx.index)
     fig_width = col_width*(len(correlation_mtx.columns)+6)
     plt.figure(figsize=(8,fig_height))
     ax = sns.heatmap(correlation_mtx, cmap='coolwarm', annot=annot)
+
+    ticklabels = [ (tick+0.5, label) \
+        for tick, label in enumerate(correlation_mtx.index) if label != ""   ]
+    ticks, labels = zip(*ticklabels)
+    plt.yticks(ticks=ticks, labels=labels, rotation=0)
+    
     ax.collections[0].set_clim(-max_abs_val,max_abs_val) 
-    plt.title(f"Label/Feature Correlations")
+    plt.title(f"Feature vs {comparator} correlations")
     _ = plt.xticks(rotation=90) 
     plt.tight_layout()
     print(f"saving plot to {pngfpath}")

@@ -121,7 +121,8 @@ def load_windowed_dataframe_and_config(subdir, data_fname='windowed.csv', **kwar
         data_dir, data_fname, **kwargs)
     return df, config    
     
-def load_featured_dataframe_and_config(subdir, data_fname='featured.csv', drop_inf='cols', **kwargs):
+def load_featured_dataframe_and_config(subdir, data_fname='featured.csv',
+        drop_inf='cols', drop_nan='cols', **kwargs):
     data_dir = os.path.join(FEATURED_BASE_PATH,subdir)
     df, config = load_dataframe_and_config(
         data_dir, data_fname, **kwargs)
@@ -135,6 +136,18 @@ def load_featured_dataframe_and_config(subdir, data_fname='featured.csv', drop_i
         pass
     else:
         raise ValueError(f"Unrecognised value for drop_inf of {drop_inf}")
+    if drop_nan=='cols':
+        df, removed_columns = drop_nan_cols(df)
+        already_removed = config['FEATURED'].get('removed_features',list())
+        already_removed.extend(removed_columns)
+        config['FEATURED']['removed_features'] = already_removed
+        feature_names = config['FEATURED']['feature_names']
+        config['FEATURED']['feature_names'] = [
+            f for f in feature_names if not f in already_removed]
+    elif not drop_nan:
+        pass
+    else:
+        raise ValueError(f"Unrecognised value for drop_nan of {drop_nan}")
     return df, config    
     
 def load_dataframe_and_config(

@@ -243,8 +243,8 @@ def filter_and_group_featured_df(
     featured_df = featured_df.loc[:,all_cols]
     # remove dataframe rows to ensure non-overlapping windows?
     if remove_overlapping_windows:
-        window_size = config['LOAD']['window_size']
-        window_step = config['LOAD']['window_step']
+        window_size = config['WINDOWED']['window_size']
+        window_step = config['WINDOWED']['window_step']
         logger.debug(
             f"Initially there are {len(featured_df.index)} windows")
         logger.info("Removing overlapping windows")
